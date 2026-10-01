@@ -39,6 +39,12 @@
             },
             {
               "id": "cfg-05",
+              "name": "google_sheet_id",
+              "value": "1u2qDX9VEfEHWLqg-nBTb1QsUayiNIbUlJJoHvEAPi_I",
+              "type": "string"
+            },
+            {
+              "id": "cfg-06",
               "name": "reset_memory",
               "value": "false",
               "type": "string"
@@ -55,13 +61,35 @@
     },
     {
       "parameters": {
-        "jsCode": "const config = $input.first().json;\nconst apiKey = config.tavily_api_key;\n\n// 4 Broad Commercial Event Searches across all 8 Categories\nconst queries = [\n  {\n    category: 'Tech & Hackathons',\n    query: 'site:unstop.com OR site:lu.ma upcoming tech conference summit hackathon developer meet 2025 2026 India',\n    apiKey,\n    config\n  },\n  {\n    category: 'Food, Flea & Music',\n    query: 'site:insider.in OR site:bookmyshow.com upcoming food festival flea market music concert lifestyle expo 2025 2026 India tickets stalls',\n    apiKey,\n    config\n  },\n  {\n    category: 'B2B Expos & Trade Fairs',\n    query: 'upcoming trade expo B2B exhibition business fair franchise expo India 2025 2026 stall booking sponsor Chennai Bengaluru Mumbai',\n    apiKey,\n    config\n  },\n  {\n    category: 'Sports & College Fests',\n    query: 'upcoming city marathon sports tournament college cultural fest Chennai Bengaluru Hyderabad 2025 2026 stall vendor title sponsor',\n    apiKey,\n    config\n  }\n];\n\nreturn queries.map(q => ({ json: q }));"
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1u2qDX9VEfEHWLqg-nBTb1QsUayiNIbUlJJoHvEAPi_I",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "a21-0002b-read-sheet",
+      "name": "Read Master Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [400, 360],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $(\"Agent Master Config\").first().json;\nconst apiKey = config.tavily_api_key;\n\n// 4 Broad Commercial Event Searches across all 8 Categories\nconst queries = [\n  {\n    category: 'Tech & Hackathons',\n    query: 'site:unstop.com OR site:lu.ma upcoming tech conference summit hackathon developer meet 2025 2026 India',\n    apiKey,\n    config\n  },\n  {\n    category: 'Food, Flea & Music',\n    query: 'site:insider.in OR site:bookmyshow.com upcoming food festival flea market music concert lifestyle expo 2025 2026 India tickets stalls',\n    apiKey,\n    config\n  },\n  {\n    category: 'B2B Expos & Trade Fairs',\n    query: 'upcoming trade expo B2B exhibition business fair franchise expo India 2025 2026 stall booking sponsor Chennai Bengaluru Mumbai',\n    apiKey,\n    config\n  },\n  {\n    category: 'Sports & College Fests',\n    query: 'upcoming city marathon sports tournament college cultural fest Chennai Bengaluru Hyderabad 2025 2026 stall vendor title sponsor',\n    apiKey,\n    config\n  }\n];\n\nreturn queries.map(q => ({ json: q }));"
       },
       "id": "a21-0003-build-portal-queries",
       "name": "Build Multi-Portal Queries",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [420, 200]
+      "position": [400, 200]
     },
     {
       "parameters": {
@@ -76,7 +104,7 @@
       "name": "Tavily Portal Search",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 200],
+      "position": [620, 200],
       "onError": "continueRegularOutput"
     },
     {
@@ -87,7 +115,7 @@
       "name": "Aggregate Portal Snippets",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [860, 200]
+      "position": [840, 200]
     },
     {
       "parameters": {
@@ -100,7 +128,7 @@
       "name": "Groq Model (Event Extractor)",
       "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
       "typeVersion": 1,
-      "position": [1080, 420],
+      "position": [1060, 420],
       "credentials": {
         "groqApi": {
           "id": "wnyadzTYaSb9M0x1",
@@ -121,17 +149,17 @@
       "name": "AI 10-Event Extractor",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [1080, 200]
+      "position": [1060, 200]
     },
     {
       "parameters": {
-        "jsCode": "const config = $(\"Agent Master Config\").first().json;\nconst rawOutput = $input.first().json.output || $input.first().json.text || '';\nlet events = [];\n\ntry {\n  const cleaned = (typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput))\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n  const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n  if (match) events = JSON.parse(match[0]);\n  else events = JSON.parse(cleaned);\n} catch (e) {\n  events = [\n    {\n      rank: 1,\n      name: 'Loyola Cultural & Tech Fest',\n      category: 'Campus Fest',\n      city: 'Chennai',\n      dates: 'Nov 15-17, 2026',\n      expected_attendance: '8,000+',\n      source_url: 'https://unstop.com',\n      target_local_niches: ['Specialty Tea & QSR', 'Student Fintech & UPI', 'Youth Streetwear Merch'],\n      commercial_hook: 'Prime youth demographic for sampling and direct stall revenue'\n    },\n    {\n      rank: 2,\n      name: 'Bengaluru AI & Developer Summit',\n      category: 'Tech Summit',\n      city: 'Bengaluru',\n      dates: 'Dec 5-7, 2026',\n      expected_attendance: '4,000+',\n      source_url: 'https://lu.ma',\n      target_local_niches: ['DevTools & Cloud', 'Specialty Coffee Roasters', 'Ergonomic Tech Gadgets'],\n      commercial_hook: 'High density of software engineers and startup decision makers'\n    },\n    {\n      rank: 3,\n      name: 'South India Food & Music Carnival',\n      category: 'Food & Music',\n      city: 'Chennai',\n      dates: 'Jan 20-22, 2027',\n      expected_attendance: '10,000+',\n      source_url: 'https://insider.in',\n      target_local_niches: ['Artisan Bakery & QSR', 'Craft Beverages & Kombucha', 'Lifestyle D2C Accessories'],\n      commercial_hook: 'Mass weekend family and foodie footfall with active stall buying'\n    }\n  ];\n}\n\nif (!Array.isArray(events) || events.length === 0) events = [];\n\n// 🧠 Native Zero-Credential Persistent Memory Layer\nconst staticData = $getWorkflowStaticData('global');\n\nif (config.reset_memory === 'true' || config.reset_memory === true) {\n  staticData.seenEvents = [];\n}\n\nstaticData.seenEvents = staticData.seenEvents || [];\nconst seenSignatures = new Set(staticData.seenEvents);\n\nconst freshEvents = [];\nconst newlySeenSignatures = [];\n\nfor (const ev of events) {\n  const sig = `${(ev.name || '').toLowerCase().trim()}_${(ev.city || '').toLowerCase().trim()}`;\n  if (!seenSignatures.has(sig)) {\n    freshEvents.push(ev);\n    newlySeenSignatures.push(sig);\n  }\n}\n\nfor (const sig of newlySeenSignatures) {\n  staticData.seenEvents.push(sig);\n}\n\nif (staticData.seenEvents.length > 500) {\n  staticData.seenEvents = staticData.seenEvents.slice(-500);\n}\n\nconst activeEvents = freshEvents.length > 0 ? freshEvents : events;\nconst top3Events = activeEvents.slice(0, 3);\n\n// Build 2-Sided Query Package for each top event (Organizer Search + Brand Search)\nconst searchJobs = [];\n\ntop3Events.forEach((ev, idx) => {\n  const city = ev.city || 'Chennai';\n  const niches = ev.target_local_niches || ['Food Beverage QSR', 'Fintech Student Brand', 'Lifestyle Merch'];\n  \n  // Supply Side: Organizer & Fest Coordinator Contact Search\n  searchJobs.push({\n    event_index: idx,\n    job_type: 'organizer_search',\n    event_name: ev.name,\n    event_city: city,\n    event_dates: ev.dates,\n    event_attendance: ev.expected_attendance,\n    event_category: ev.category,\n    event_hook: ev.commercial_hook,\n    event_source: ev.source_url,\n    niches: niches,\n    query: `\"${ev.name}\" \"${city}\" (\"Fest Coordinator\" OR \"Sponsorship\" OR \"Stall Booking\" OR \"Contact\" OR \"instagram.com\" OR \"unstop.com\")`,\n    apiKey: config.tavily_api_key,\n    config,\n    all_events: activeEvents\n  });\n\n  // Demand Side: Multi-Category Local Challenger Brands Search\n  searchJobs.push({\n    event_index: idx,\n    job_type: 'brand_search',\n    event_name: ev.name,\n    event_city: city,\n    event_dates: ev.dates,\n    event_attendance: ev.expected_attendance,\n    event_category: ev.category,\n    event_hook: ev.commercial_hook,\n    event_source: ev.source_url,\n    niches: niches,\n    query: `top emerging challenger brands in ${city} for (${niches.join(' OR ')}) official website`,\n    apiKey: config.tavily_api_key,\n    config,\n    all_events: activeEvents\n  });\n});\n\nreturn searchJobs.map(sj => ({ json: sj }));"
+        "jsCode": "const config = $(\"Agent Master Config\").first().json;\nconst rawOutput = $input.first().json.output || $input.first().json.text || '';\nlet events = [];\n\ntry {\n  const cleaned = (typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput))\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n  const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n  if (match) events = JSON.parse(match[0]);\n  else events = JSON.parse(cleaned);\n} catch (e) {\n  events = [\n    {\n      rank: 1,\n      name: 'Loyola Cultural & Tech Fest',\n      category: 'Campus Fest',\n      city: 'Chennai',\n      dates: 'Nov 15-17, 2026',\n      expected_attendance: '8,000+',\n      source_url: 'https://unstop.com',\n      target_local_niches: ['Specialty Tea & QSR', 'Student Fintech & UPI', 'Youth Streetwear Merch'],\n      commercial_hook: 'Prime youth demographic for sampling and direct stall revenue'\n    },\n    {\n      rank: 2,\n      name: 'Bengaluru AI & Developer Summit',\n      category: 'Tech Summit',\n      city: 'Bengaluru',\n      dates: 'Dec 5-7, 2026',\n      expected_attendance: '4,000+',\n      source_url: 'https://lu.ma',\n      target_local_niches: ['DevTools & Cloud', 'Specialty Coffee Roasters', 'Ergonomic Tech Gadgets'],\n      commercial_hook: 'High density of software engineers and startup decision makers'\n    },\n    {\n      rank: 3,\n      name: 'South India Food & Music Carnival',\n      category: 'Food & Music',\n      city: 'Chennai',\n      dates: 'Jan 20-22, 2027',\n      expected_attendance: '10,000+',\n      source_url: 'https://insider.in',\n      target_local_niches: ['Artisan Bakery & QSR', 'Craft Beverages & Kombucha', 'Lifestyle D2C Accessories'],\n      commercial_hook: 'Mass weekend family and foodie footfall with active stall buying'\n    }\n  ];\n}\n\nif (!Array.isArray(events) || events.length === 0) events = [];\n\n// 📊 Read Master Seen Events from Google Sheet Database\nlet sheetSeenNames = new Set();\ntry {\n  const sheetRows = $(\"Read Master Google Sheet\").all();\n  sheetRows.forEach(row => {\n    const eName = row.json['Event Name'] || row.json.name || '';\n    const eCity = row.json['City'] || row.json.city || '';\n    if (eName) {\n      sheetSeenNames.add(`${eName.toLowerCase().trim()}_${eCity.toLowerCase().trim()}`);\n    }\n  });\n} catch(e) {}\n\n// 🧠 Native Workflow Static Data Fallback\nconst staticData = $getWorkflowStaticData('global');\nif (config.reset_memory === 'true' || config.reset_memory === true) {\n  staticData.seenEvents = [];\n}\nstaticData.seenEvents = staticData.seenEvents || [];\nstaticData.seenEvents.forEach(sig => sheetSeenNames.add(sig));\n\nconst freshEvents = [];\nconst newlySeenSignatures = [];\n\nfor (const ev of events) {\n  const sig = `${(ev.name || '').toLowerCase().trim()}_${(ev.city || '').toLowerCase().trim()}`;\n  if (!sheetSeenNames.has(sig)) {\n    freshEvents.push(ev);\n    newlySeenSignatures.push(sig);\n  }\n}\n\nfor (const sig of newlySeenSignatures) {\n  staticData.seenEvents.push(sig);\n}\n\nif (staticData.seenEvents.length > 500) {\n  staticData.seenEvents = staticData.seenEvents.slice(-500);\n}\n\nconst activeEvents = freshEvents.length > 0 ? freshEvents : events;\nconst top3Events = activeEvents.slice(0, 3);\n\n// Build 2-Sided Query Package for each top event (Organizer Search + Brand Search)\nconst searchJobs = [];\n\ntop3Events.forEach((ev, idx) => {\n  const city = ev.city || 'Chennai';\n  const niches = ev.target_local_niches || ['Food Beverage QSR', 'Fintech Student Brand', 'Lifestyle Merch'];\n  \n  searchJobs.push({\n    event_index: idx,\n    job_type: 'organizer_search',\n    event_name: ev.name,\n    event_city: city,\n    event_dates: ev.dates,\n    event_attendance: ev.expected_attendance,\n    event_category: ev.category,\n    event_hook: ev.commercial_hook,\n    event_source: ev.source_url,\n    niches: niches,\n    query: `\"${ev.name}\" \"${city}\" (\"Fest Coordinator\" OR \"Sponsorship\" OR \"Stall Booking\" OR \"Contact\" OR \"instagram.com\" OR \"unstop.com\")`,\n    apiKey: config.tavily_api_key,\n    config,\n    all_events: activeEvents,\n    fresh_events: freshEvents.length > 0 ? freshEvents : events\n  });\n\n  searchJobs.push({\n    event_index: idx,\n    job_type: 'brand_search',\n    event_name: ev.name,\n    event_city: city,\n    event_dates: ev.dates,\n    event_attendance: ev.expected_attendance,\n    event_category: ev.category,\n    event_hook: ev.commercial_hook,\n    event_source: ev.source_url,\n    niches: niches,\n    query: `top emerging challenger brands in ${city} for (${niches.join(' OR ')}) official website`,\n    apiKey: config.tavily_api_key,\n    config,\n    all_events: activeEvents,\n    fresh_events: freshEvents.length > 0 ? freshEvents : events\n  });\n});\n\nreturn searchJobs.map(sj => ({ json: sj }));"
       },
       "id": "a21-0008-event-memory-dedup",
-      "name": "Event Memory & 2-Sided Query Engine",
+      "name": "Event Memory & Google Sheet Dedup",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1300, 200]
+      "position": [1280, 200]
     },
     {
       "parameters": {
@@ -146,18 +174,18 @@
       "name": "Step 1: Tavily 2-Sided Search",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1520, 200],
+      "position": [1500, 200],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const allItems = $input.all();\nconst config = $(\"Agent Master Config\").first().json;\nconst jobsRef = $(\"Event Memory & 2-Sided Query Engine\").all();\nconst allEvents = jobsRef[0]?.json.all_events || [];\n\n// Group by event_index\nconst eventGroups = {};\n\nfor (let i = 0; i < allItems.length; i++) {\n  const item = allItems[i].json;\n  const ref = jobsRef[i]?.json || {};\n  const eIdx = ref.event_index !== undefined ? ref.event_index : Math.floor(i / 2);\n  \n  if (!eventGroups[eIdx]) {\n    eventGroups[eIdx] = {\n      event_name: ref.event_name,\n      event_city: ref.event_city,\n      event_dates: ref.event_dates,\n      event_attendance: ref.event_attendance,\n      event_category: ref.event_category,\n      event_hook: ref.event_hook,\n      event_source: ref.event_source,\n      niches: ref.niches || [],\n      organizer: null,\n      brands: []\n    };\n  }\n\n  const results = item.results || item.organic_results || [];\n\n  if (ref.job_type === 'organizer_search') {\n    let orgName = '';\n    let orgPhone = '';\n    let cleanOrgPhone = '';\n    let orgSource = '';\n    let orgRole = 'Fest Convener / Sponsorship Head';\n\n    for (const r of results) {\n      const content = `${r.title || ''} ${r.content || ''} ${r.snippet || ''}`;\n      const phoneMatch = content.match(/(?:\\+91|91)?[\\s-]?[6-9]\\d{9}/);\n      if (phoneMatch && !orgPhone) {\n        orgPhone = phoneMatch[0];\n        cleanOrgPhone = orgPhone.replace(/[^0-9]/g, '');\n        if (cleanOrgPhone.length === 10) cleanOrgPhone = '91' + cleanOrgPhone;\n      }\n      if (r.url?.includes('instagram.com') && !orgSource) {\n        orgSource = r.url;\n      } else if (r.url?.includes('unstop.com') && !orgSource) {\n        orgSource = r.url;\n      }\n      const nameMatch = content.match(/(?:Contact|Convenor|Coordinator|Lead|President|Secretary):?\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)/i);\n      if (nameMatch && !orgName) {\n        orgName = nameMatch[1];\n      }\n    }\n\n    if (!orgName) orgName = 'Student Council / Fest Head';\n    if (!orgSource) orgSource = ref.event_source || 'https://unstop.com';\n    \n    eventGroups[eIdx].organizer = {\n      name: orgName,\n      role: orgRole,\n      phone: orgPhone || '+91 98840 XXXXX (Available on Fest Desk)',\n      clean_phone: cleanOrgPhone,\n      source_url: orgSource\n    };\n  } else {\n    // Brand Search Results Parsing\n    for (const r of results) {\n      const title = (r.title || '').trim();\n      const url = (r.url || '').trim();\n      if (url.includes('wikipedia') || url.includes('tripadvisor') || url.includes('justdial')) continue;\n      \n      let bName = title.split(/[-–|:]/)[0].trim();\n      if (bName && bName.length < 30 && !bName.startsWith('#')) {\n        eventGroups[eIdx].brands.push({\n          company_name: bName,\n          website: url,\n          category: ref.niches[eventGroups[eIdx].brands.length] || 'Challenger Brand'\n        });\n      }\n      if (eventGroups[eIdx].brands.length >= 3) break;\n    }\n  }\n}\n\n// Ensure each event has structured 3-tier brand stack & organizer\nconst finalDealPackages = Object.values(eventGroups).map((eg, idx) => {\n  if (!eg.organizer) {\n    eg.organizer = {\n      name: 'Event Organizing Team',\n      role: 'Sponsorship & Stall Desk',\n      phone: '+91 98400 XXXXX',\n      clean_phone: '',\n      source_url: eg.event_source || 'https://unstop.com'\n    };\n  }\n\n  // Curate rich defaults if web results were scarce\n  if (!eg.brands || eg.brands.length === 0) {\n    if (eg.event_city === 'Bengaluru') {\n      eg.brands = [\n        { company_name: 'Third Wave Coffee', category: 'Specialty Coffee / Beverage', contact: 'Ayush Bathwal (Co-Founder)' },\n        { company_name: 'Hasura', category: 'Developer Tooling & Tech', contact: 'Tanmai Gopal (CEO)' },\n        { company_name: 'Ultrahuman', category: 'HealthTech & Wearables', contact: 'Mohit Kumar (Founder)' }\n      ];\n    } else if (eg.event_city === 'Chennai') {\n      eg.brands = [\n        { company_name: 'Chai Waale', category: 'QSR / Specialty Beverage', contact: 'Vidur Mahtani (Founder)' },\n        { company_name: 'Slice / FamPay', category: 'Youth Fintech & UPI', contact: 'Rajan Bajaj (Founder)' },\n        { company_name: 'The Souled Store', category: 'Youth Apparel & Merch', contact: 'Vedang Patel (Co-Founder)' }\n      ];\n    } else {\n      eg.brands = [\n        { company_name: 'Chaayos', category: 'QSR & Beverage', contact: 'Nitin Saluja (Founder)' },\n        { company_name: 'Jar App', category: 'Gen-Z Fintech & Savings', contact: 'Nishchay AG (Founder)' },\n        { company_name: 'Snitch', category: 'Men Streetwear & D2C', contact: 'Siddharth Dungarwal (Founder)' }\n      ];\n    }\n  }\n\n  return {\n    deal_index: idx + 1,\n    ...eg\n  };\n});\n\nlet pitchPrompt = 'TWO-SIDED EVENT DEAL PACKAGES TO GENERATE DUAL OUTREACH PITCHES FOR:\\n\\n';\nfinalDealPackages.forEach(dp => {\n  pitchPrompt += `Deal Package #${dp.deal_index}:\\n`;\n  pitchPrompt += `- Event: ${dp.event_name} (${dp.event_city}, ${dp.event_dates}, Attendance: ${dp.event_attendance})\\n`;\n  pitchPrompt += `- Organizer Contact: ${dp.organizer.name} (${dp.organizer.role})\\n`;\n  pitchPrompt += `- Target Brands Stack: ${dp.brands.map(b => b.company_name + ' [' + (b.category || '') + ']').join(', ')}\\n\\n`;\n});\n\nreturn [{\n  json: {\n    config,\n    all_10_events: allEvents,\n    deal_packages: finalDealPackages,\n    pitch_prompt_text: pitchPrompt\n  }\n}];"
+        "jsCode": "const allItems = $input.all();\nconst config = $(\"Agent Master Config\").first().json;\nconst jobsRef = $(\"Event Memory & Google Sheet Dedup\").all();\nconst allEvents = jobsRef[0]?.json.all_events || [];\nconst freshEvents = jobsRef[0]?.json.fresh_events || allEvents;\n\nconst eventGroups = {};\n\nfor (let i = 0; i < allItems.length; i++) {\n  const item = allItems[i].json;\n  const ref = jobsRef[i]?.json || {};\n  const eIdx = ref.event_index !== undefined ? ref.event_index : Math.floor(i / 2);\n  \n  if (!eventGroups[eIdx]) {\n    eventGroups[eIdx] = {\n      event_name: ref.event_name,\n      event_city: ref.event_city,\n      event_dates: ref.event_dates,\n      event_attendance: ref.event_attendance,\n      event_category: ref.event_category,\n      event_hook: ref.event_hook,\n      event_source: ref.event_source,\n      niches: ref.niches || [],\n      organizer: null,\n      brands: []\n    };\n  }\n\n  const results = item.results || item.organic_results || [];\n\n  if (ref.job_type === 'organizer_search') {\n    let orgName = '';\n    let orgPhone = '';\n    let cleanOrgPhone = '';\n    let orgSource = '';\n    let orgRole = 'Fest Convener / Sponsorship Head';\n\n    for (const r of results) {\n      const content = `${r.title || ''} ${r.content || ''} ${r.snippet || ''}`;\n      const phoneMatch = content.match(/(?:\\+91|91)?[\\s-]?[6-9]\\d{9}/);\n      if (phoneMatch && !orgPhone) {\n        orgPhone = phoneMatch[0];\n        cleanOrgPhone = orgPhone.replace(/[^0-9]/g, '');\n        if (cleanOrgPhone.length === 10) cleanOrgPhone = '91' + cleanOrgPhone;\n      }\n      if (r.url?.includes('instagram.com') && !orgSource) {\n        orgSource = r.url;\n      } else if (r.url?.includes('unstop.com') && !orgSource) {\n        orgSource = r.url;\n      }\n      const nameMatch = content.match(/(?:Contact|Convenor|Coordinator|Lead|President|Secretary):?\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)/i);\n      if (nameMatch && !orgName) {\n        orgName = nameMatch[1];\n      }\n    }\n\n    if (!orgName) orgName = 'Student Council / Fest Head';\n    if (!orgSource) orgSource = ref.event_source || 'https://unstop.com';\n    \n    eventGroups[eIdx].organizer = {\n      name: orgName,\n      role: orgRole,\n      phone: orgPhone || '+91 98840 XXXXX (Available on Fest Desk)',\n      clean_phone: cleanOrgPhone,\n      source_url: orgSource\n    };\n  } else {\n    for (const r of results) {\n      const title = (r.title || '').trim();\n      const url = (r.url || '').trim();\n      if (url.includes('wikipedia') || url.includes('tripadvisor') || url.includes('justdial')) continue;\n      \n      let bName = title.split(/[-–|:]/)[0].trim();\n      if (bName && bName.length < 30 && !bName.startsWith('#')) {\n        eventGroups[eIdx].brands.push({\n          company_name: bName,\n          website: url,\n          category: ref.niches[eventGroups[eIdx].brands.length] || 'Challenger Brand'\n        });\n      }\n      if (eventGroups[eIdx].brands.length >= 3) break;\n    }\n  }\n}\n\nconst finalDealPackages = Object.values(eventGroups).map((eg, idx) => {\n  if (!eg.organizer) {\n    eg.organizer = {\n      name: 'Event Organizing Team',\n      role: 'Sponsorship & Stall Desk',\n      phone: '+91 98400 XXXXX',\n      clean_phone: '',\n      source_url: eg.event_source || 'https://unstop.com'\n    };\n  }\n\n  if (!eg.brands || eg.brands.length === 0) {\n    if (eg.event_city === 'Bengaluru') {\n      eg.brands = [\n        { company_name: 'Third Wave Coffee', category: 'Specialty Coffee / Beverage', contact: 'Ayush Bathwal (Co-Founder)' },\n        { company_name: 'Hasura', category: 'Developer Tooling & Tech', contact: 'Tanmai Gopal (CEO)' },\n        { company_name: 'Ultrahuman', category: 'HealthTech & Wearables', contact: 'Mohit Kumar (Founder)' }\n      ];\n    } else if (eg.event_city === 'Chennai') {\n      eg.brands = [\n        { company_name: 'Chai Waale', category: 'QSR / Specialty Beverage', contact: 'Vidur Mahtani (Founder)' },\n        { company_name: 'Slice / FamPay', category: 'Youth Fintech & UPI', contact: 'Rajan Bajaj (Founder)' },\n        { company_name: 'The Souled Store', category: 'Youth Apparel & Merch', contact: 'Vedang Patel (Co-Founder)' }\n      ];\n    } else {\n      eg.brands = [\n        { company_name: 'Chaayos', category: 'QSR & Beverage', contact: 'Nitin Saluja (Founder)' },\n        { company_name: 'Jar App', category: 'Gen-Z Fintech & Savings', contact: 'Nishchay AG (Founder)' },\n        { company_name: 'Snitch', category: 'Men Streetwear & D2C', contact: 'Siddharth Dungarwal (Founder)' }\n      ];\n    }\n  }\n\n  return {\n    deal_index: idx + 1,\n    ...eg\n  };\n});\n\nlet pitchPrompt = 'TWO-SIDED EVENT DEAL PACKAGES TO GENERATE DUAL OUTREACH PITCHES FOR:\\n\\n';\nfinalDealPackages.forEach(dp => {\n  pitchPrompt += `Deal Package #${dp.deal_index}:\\n`;\n  pitchPrompt += `- Event: ${dp.event_name} (${dp.event_city}, ${dp.event_dates}, Attendance: ${dp.event_attendance})\\n`;\n  pitchPrompt += `- Organizer Contact: ${dp.organizer.name} (${dp.organizer.role})\\n`;\n  pitchPrompt += `- Target Brands Stack: ${dp.brands.map(b => b.company_name + ' [' + (b.category || '') + ']').join(', ')}\\n\\n`;\n});\n\nreturn [{\n  json: {\n    config,\n    all_10_events: allEvents,\n    fresh_events: freshEvents,\n    deal_packages: finalDealPackages,\n    pitch_prompt_text: pitchPrompt\n  }\n}];"
       },
       "id": "a21-0010-step1-lock-brand-entity",
       "name": "Step 1: Lock 2-Sided Entities & Multi-Brand Stack",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1740, 200]
+      "position": [1720, 200]
     },
     {
       "parameters": {
@@ -170,7 +198,7 @@
       "name": "Groq Model (Pitch Drafter)",
       "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
       "typeVersion": 1,
-      "position": [2000, 420],
+      "position": [1960, 420],
       "credentials": {
         "groqApi": {
           "id": "wnyadzTYaSb9M0x1",
@@ -191,17 +219,17 @@
       "name": "Personalized 2-Way Pitch Drafter",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [2000, 200]
+      "position": [1960, 200]
     },
     {
       "parameters": {
-        "jsCode": "function escapeHtml(val) {\n  if (val === null || val === undefined) return '';\n  return String(val)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n}\n\nfunction safeSubstring(str, maxLen) {\n  if (!str) return '';\n  const codePoints = Array.from(str);\n  if (codePoints.length <= maxLen) return str;\n  return codePoints.slice(0, maxLen).join('') + '...';\n}\n\nconst inputData = $(\"Step 1: Lock 2-Sided Entities & Multi-Brand Stack\").first().json;\nconst allEvents = inputData.all_10_events || [];\nconst packages = inputData.deal_packages || [];\nconst config = inputData.config || {};\n\nlet pitches = [];\nconst rawPitch = $input.first().json.output || $input.first().json.text || '';\ntry {\n  const cleaned = (typeof rawPitch === 'string' ? rawPitch : JSON.stringify(rawPitch))\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n  const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n  if (match) pitches = JSON.parse(match[0]);\n  else pitches = JSON.parse(cleaned);\n} catch (e) {\n  pitches = packages.map((p, i) => ({\n    deal_index: i + 1,\n    organizer_pitch: `Hi ${p.organizer.name.split(' ')[0]}, we are curating verified challenger brands for ${p.event_name} (${p.event_dates}). Can you share the 1-page stall rate card and slot availability?`,\n    sponsor_pitch: `Hi there, we have prime stall openings at ${p.event_name} (${p.event_attendance} footfall in ${p.event_city}). Can I share the 1-page layout deck today?`\n  }));\n}\n\n// Assemble Two-Sided Executive Intelligence Briefing\nlet msg = `🎯 <b>EVENT MONEY AGENT 2.1 — TWO-SIDED DEAL INTELLIGENCE</b>\\n`;\nmsg += `<i>Scanned 8 categories across India • Organizers + Multi-Category Brand Stack</i>\\n\\n`;\n\nmsg += `━━━━━━━━━━━━━━━━━━━━\\n`;\nmsg += `📊 <b>TOP 10 DISCOVERED UPCOMING EVENTS</b>\\n\\n`;\n\nallEvents.slice(0, 10).forEach((ev, i) => {\n  const catEmoji = ev.category?.includes('Tech') ? '💻' : ev.category?.includes('Food') ? '🍔' : ev.category?.includes('Campus') ? '🎓' : ev.category?.includes('Marathon') ? '🏃' : '🏢';\n  const name = escapeHtml(ev.name || 'Event');\n  const city = escapeHtml(ev.city || 'India');\n  const dates = escapeHtml(ev.dates || 'Upcoming');\n  const attendance = escapeHtml(ev.expected_attendance || '3,000+');\n  msg += `<b>${i + 1}. ${catEmoji} ${name}</b>\\n`;\n  msg += `   📍 ${city} | 📅 ${dates} | 👥 ${attendance}\\n`;\n  if (ev.source_url) {\n    const safeUrl = String(ev.source_url).replace(/\"/g, '%22');\n    msg += `   🔗 <a href=\"${safeUrl}\">Portal Link</a>\\n`;\n  }\n});\n\nmsg += `\\n━━━━━━━━━━━━━━━━━━━━\\n`;\nmsg += `🔥 <b>TOP 3 TWO-SIDED ACTIONABLE DEAL PACKAGES</b>\\n\\n`;\n\npackages.forEach((pkg, i) => {\n  const pitchObj = (Array.isArray(pitches) ? pitches : []).find(p => p.deal_index === (i + 1)) || pitches[i] || {};\n  const orgPitch = pitchObj.organizer_pitch || `Hi, sharing brand interest for ${pkg.event_name}. Can you share stall rates?`;\n  const sponsorPitch = pitchObj.sponsor_pitch || `Hi, prime stall openings available for ${pkg.event_name}. Can I share the deck?`;\n  \n  const eventName = escapeHtml(pkg.event_name || 'Event');\n  const eventCity = escapeHtml(pkg.event_city || '');\n  const dates = escapeHtml(pkg.event_dates || '');\n  const attendance = escapeHtml(pkg.event_attendance || '');\n  const org = pkg.organizer || {};\n  const orgName = escapeHtml(org.name || 'Fest Lead');\n  const orgRole = escapeHtml(org.role || 'Coordinator');\n  const orgPhone = escapeHtml(org.phone || '');\n\n  msg += `<b>#${i + 1} ${eventName}</b> (${eventCity})\\n`;\n  msg += `📅 <b>Dates:</b> ${dates} | 👥 <b>Footfall:</b> ${attendance}\\n`;\n  \n  // Supply Side\n  msg += `🎟️ <b>ORGANIZER (HOLD STALLS):</b>\\n`;\n  msg += `   👤 ${orgName} (<i>${orgRole}</i>)\\n`;\n  if (orgPhone) msg += `   📞 ${orgPhone}\\n`;\n  if (org.source_url) msg += `   🔗 <a href=\"${String(org.source_url).replace(/\"/g, '%22')}\">Fest / Portal Desk Link</a>\\n`;\n  \n  if (org.clean_phone) {\n    const orgWaLink = `https://wa.me/${org.clean_phone}?text=${encodeURIComponent(orgPitch)}`;\n    msg += `   📲 <a href=\"${orgWaLink.replace(/\"/g, '%22')}\">👉 WhatsApp Organizer to Lock Stalls</a>\\n`;\n  }\n\n  // Demand Side (Multi-Category Brands)\n  msg += `\\n💰 <b>TARGET SPONSOR STACK (SELL STALLS):</b>\\n`;\n  (pkg.brands || []).slice(0, 3).forEach((b, bIdx) => {\n    const bName = escapeHtml(b.company_name || 'Brand');\n    const bCat = escapeHtml(b.category || 'Challenger Niche');\n    const bContact = escapeHtml(b.contact || 'Decision Maker');\n    msg += `   <b>${bIdx + 1}. ${bName}</b> [${bCat}] — <i>${bContact}</i>\\n`;\n  });\n\n  // Pitch to Brand Hook\n  msg += `💬 <b>Brand Pitch:</b> <i>\"${escapeHtml(sponsorPitch)}\"</i>\\n`;\n  const firstBrand = (pkg.brands && pkg.brands[0]) || {};\n  if (firstBrand.website) {\n    msg += `🌐 <a href=\"${String(firstBrand.website).replace(/\"/g, '%22')}\">👉 Open Brand Portal</a>\\n`;\n  }\n  \n  msg += `\\n------------------------------------\\n`;\n});\n\nmsg += `\\n⚡ <i>Two-sided marketplace execution complete. Zero manual hunting. Full deal control.</i>`;\n\nif (Array.from(msg).length > 3900) {\n  msg = safeSubstring(msg, 3850) + '\\n\\n...[Briefing truncated for Telegram size limit]';\n}\n\nconst rawChatIds = config.telegram_chat_ids || config.telegram_chat_id || '6398643373';\nconst chatIds = rawChatIds\n  .toString()\n  .split(',')\n  .map(id => id.trim())\n  .filter(id => id.length > 0);\n\nreturn chatIds.map(cid => ({\n  json: {\n    chat_id: cid,\n    telegram_message: msg,\n    all_events: allEvents,\n    deal_packages: packages\n  }\n}));"
+        "jsCode": "function escapeHtml(val) {\n  if (val === null || val === undefined) return '';\n  return String(val)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n}\n\nfunction safeSubstring(str, maxLen) {\n  if (!str) return '';\n  const codePoints = Array.from(str);\n  if (codePoints.length <= maxLen) return str;\n  return codePoints.slice(0, maxLen).join('') + '...';\n}\n\nconst inputData = $(\"Step 1: Lock 2-Sided Entities & Multi-Brand Stack\").first().json;\nconst allEvents = inputData.all_10_events || [];\nconst packages = inputData.deal_packages || [];\nconst freshEvents = inputData.fresh_events || allEvents;\nconst config = inputData.config || {};\n\nlet pitches = [];\nconst rawPitch = $input.first().json.output || $input.first().json.text || '';\ntry {\n  const cleaned = (typeof rawPitch === 'string' ? rawPitch : JSON.stringify(rawPitch))\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n  const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n  if (match) pitches = JSON.parse(match[0]);\n  else pitches = JSON.parse(cleaned);\n} catch (e) {\n  pitches = packages.map((p, i) => ({\n    deal_index: i + 1,\n    organizer_pitch: `Hi ${p.organizer.name.split(' ')[0]}, we are curating verified challenger brands for ${p.event_name} (${p.event_dates}). Can you share the 1-page stall rate card and slot availability?`,\n    sponsor_pitch: `Hi there, we have prime stall openings at ${p.event_name} (${p.event_attendance} footfall in ${p.event_city}). Can I share the 1-page layout deck today?`\n  }));\n}\n\n// Assemble Two-Sided Executive Intelligence Briefing\nlet msg = `🎯 <b>EVENT MONEY AGENT 2.1 — TWO-SIDED DEAL INTELLIGENCE</b>\\n`;\nmsg += `<i>Scanned 8 categories across India • Organizers + Multi-Category Brand Stack</i>\\n\\n`;\n\nmsg += `━━━━━━━━━━━━━━━━━━━━\\n`;\nmsg += `📊 <b>TOP 10 DISCOVERED UPCOMING EVENTS</b>\\n\\n`;\n\nallEvents.slice(0, 10).forEach((ev, i) => {\n  const catEmoji = ev.category?.includes('Tech') ? '💻' : ev.category?.includes('Food') ? '🍔' : ev.category?.includes('Campus') ? '🎓' : ev.category?.includes('Marathon') ? '🏃' : '🏢';\n  const name = escapeHtml(ev.name || 'Event');\n  const city = escapeHtml(ev.city || 'India');\n  const dates = escapeHtml(ev.dates || 'Upcoming');\n  const attendance = escapeHtml(ev.expected_attendance || '3,000+');\n  msg += `<b>${i + 1}. ${catEmoji} ${name}</b>\\n`;\n  msg += `   📍 ${city} | 📅 ${dates} | 👥 ${attendance}\\n`;\n  if (ev.source_url) {\n    const safeUrl = String(ev.source_url).replace(/\"/g, '%22');\n    msg += `   🔗 <a href=\"${safeUrl}\">Portal Link</a>\\n`;\n  }\n});\n\nmsg += `\\n━━━━━━━━━━━━━━━━━━━━\\n`;\nmsg += `🔥 <b>TOP 3 TWO-SIDED ACTIONABLE DEAL PACKAGES</b>\\n\\n`;\n\npackages.forEach((pkg, i) => {\n  const pitchObj = (Array.isArray(pitches) ? pitches : []).find(p => p.deal_index === (i + 1)) || pitches[i] || {};\n  const orgPitch = pitchObj.organizer_pitch || `Hi, sharing brand interest for ${pkg.event_name}. Can you share stall rates?`;\n  const sponsorPitch = pitchObj.sponsor_pitch || `Hi, prime stall openings available for ${pkg.event_name}. Can I share the deck?`;\n  \n  const eventName = escapeHtml(pkg.event_name || 'Event');\n  const eventCity = escapeHtml(pkg.event_city || '');\n  const dates = escapeHtml(pkg.event_dates || '');\n  const attendance = escapeHtml(pkg.event_attendance || '');\n  const org = pkg.organizer || {};\n  const orgName = escapeHtml(org.name || 'Fest Lead');\n  const orgRole = escapeHtml(org.role || 'Coordinator');\n  const orgPhone = escapeHtml(org.phone || '');\n\n  msg += `<b>#${i + 1} ${eventName}</b> (${eventCity})\\n`;\n  msg += `📅 <b>Dates:</b> ${dates} | 👥 <b>Footfall:</b> ${attendance}\\n`;\n  \n  // Supply Side\n  msg += `🎟️ <b>ORGANIZER (HOLD STALLS):</b>\\n`;\n  msg += `   👤 ${orgName} (<i>${orgRole}</i>)\\n`;\n  if (orgPhone) msg += `   📞 ${orgPhone}\\n`;\n  if (org.source_url) msg += `   🔗 <a href=\"${String(org.source_url).replace(/\"/g, '%22')}\">Fest / Portal Desk Link</a>\\n`;\n  \n  if (org.clean_phone) {\n    const orgWaLink = `https://wa.me/${org.clean_phone}?text=${encodeURIComponent(orgPitch)}`;\n    msg += `   📲 <a href=\"${orgWaLink.replace(/\"/g, '%22')}\">👉 WhatsApp Organizer to Lock Stalls</a>\\n`;\n  }\n\n  // Demand Side (Multi-Category Brands)\n  msg += `\\n💰 <b>TARGET SPONSOR STACK (SELL STALLS):</b>\\n`;\n  (pkg.brands || []).slice(0, 3).forEach((b, bIdx) => {\n    const bName = escapeHtml(b.company_name || 'Brand');\n    const bCat = escapeHtml(b.category || 'Challenger Niche');\n    const bContact = escapeHtml(b.contact || 'Decision Maker');\n    msg += `   <b>${bIdx + 1}. ${bName}</b> [${bCat}] — <i>${bContact}</i>\\n`;\n  });\n\n  // Pitch to Brand Hook\n  msg += `💬 <b>Brand Pitch:</b> <i>\"${escapeHtml(sponsorPitch)}\"</i>\\n`;\n  const firstBrand = (pkg.brands && pkg.brands[0]) || {};\n  if (firstBrand.website) {\n    msg += `🌐 <a href=\"${String(firstBrand.website).replace(/\"/g, '%22')}\">👉 Open Brand Portal</a>\\n`;\n  }\n  \n  msg += `\\n------------------------------------\\n`;\n});\n\nmsg += `\\n⚡ <i>Two-sided marketplace execution complete. Zero manual hunting. Full deal control.</i>`;\n\nif (Array.from(msg).length > 3900) {\n  msg = safeSubstring(msg, 3850) + '\\n\\n...[Briefing truncated for Telegram size limit]';\n}\n\nconst rawChatIds = config.telegram_chat_ids || config.telegram_chat_id || '6398643373';\nconst chatIds = rawChatIds\n  .toString()\n  .split(',')\n  .map(id => id.trim())\n  .filter(id => id.length > 0);\n\nreturn chatIds.map(cid => ({\n  json: {\n    chat_id: cid,\n    telegram_message: msg,\n    all_events: allEvents,\n    fresh_events: freshEvents,\n    deal_packages: packages\n  }\n}));"
       },
       "id": "a21-0015-format-telegram-briefing",
       "name": "Format Telegram 10-Event Briefing",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2300, 200]
+      "position": [2200, 200]
     },
     {
       "parameters": {
@@ -215,13 +243,49 @@
       "name": "Send Telegram Briefing",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [2550, 200],
+      "position": [2420, 200],
       "credentials": {
         "telegramApi": {
           "id": "telegram_bot_token_main",
           "name": "Telegram account"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\nconst eventsToRecord = inputData.all_events || [];\nconst today = new Date().toISOString().split('T')[0];\n\nreturn eventsToRecord.slice(0, 10).map(ev => ({\n  json: {\n    'Event Name': ev.name || 'Event',\n    'City': ev.city || 'India',\n    'Category': ev.category || 'Commercial',\n    'Dates': ev.dates || 'Upcoming',\n    'Footfall': ev.expected_attendance || '3,000+',\n    'Discovered At': today\n  }\n}));"
+      },
+      "id": "a21-0017-prep-sheet-rows",
+      "name": "Prep Google Sheet Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 200]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1u2qDX9VEfEHWLqg-nBTb1QsUayiNIbUlJJoHvEAPi_I",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "a21-0018-append-to-sheet",
+      "name": "Auto-Record to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2860, 200],
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -241,6 +305,11 @@
         [
           {
             "node": "Build Multi-Portal Queries",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Master Google Sheet",
             "type": "main",
             "index": 0
           }
@@ -295,14 +364,14 @@
       "main": [
         [
           {
-            "node": "Event Memory & 2-Sided Query Engine",
+            "node": "Event Memory & Google Sheet Dedup",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Event Memory & 2-Sided Query Engine": {
+    "Event Memory & Google Sheet Dedup": {
       "main": [
         [
           {
@@ -362,6 +431,28 @@
         [
           {
             "node": "Send Telegram Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Briefing": {
+      "main": [
+        [
+          {
+            "node": "Prep Google Sheet Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Google Sheet Rows": {
+      "main": [
+        [
+          {
+            "node": "Auto-Record to Google Sheet",
             "type": "main",
             "index": 0
           }
