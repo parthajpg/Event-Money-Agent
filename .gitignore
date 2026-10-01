@@ -1,0 +1,11 @@
+# n8n Local Data and Environment
+.env
+*.log
+n8n/.n8n/
+n8n_data/
+
+# OS and Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

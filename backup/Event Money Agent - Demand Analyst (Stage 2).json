@@ -1,0 +1,126 @@
+{
+  "name": "Event Money Agent - Demand Analyst (Stage 2)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            },
+            {
+              "name": "audience",
+              "type": "object"
+            },
+            {
+              "name": "unknowns",
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "id": "b690f5f8-f401-46ca-a1ee-c745484b2000",
+      "name": "When Called by Commander",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($(\"When Called by Commander\").first().json) }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are DEMAND ANALYST in the Event Money Agent system.\nYou receive a STRUCTURED EVENT ANALYSIS (JSON) in the user message and must assess commercial demand.\n\nANALYZE:\n- Audience size, characteristics, geographic reach, interests.\n- Commercial demand: spending categories, relevant industries, market attractiveness, growth potential.\n\nOUTPUT a demand_score (0-100), reasoning, evidence, assumptions, and confidence.\n\nSTRICT RULES:\n- Work only from the provided analysis plus sound general market reasoning. You have NO web/tool access in this stage.\n- Never fabricate sources, statistics, URLs, or company names. If you cannot support a claim with data, mark it as an ASSUMPTION or INFERENCE.\n- Every item in \"evidence\" must carry a status: VERIFIED (from the input), ESTIMATE (derived number/range), INFERENCE (reasoned conclusion), or ASSUMPTION (unverified premise).\n- State all guesses explicitly in \"assumptions\". Do not present assumptions as facts.\n- Respect the event's stated audience and location; do not silently expand scope.\n\nREQUIRED JSON SCHEMA:\n{\n  \"demand_score\": 85,\n  \"audience_analysis\": { \"size\": \"...\", \"characteristics\": \"...\", \"geographic_reach\": \"...\", \"interests\": [\"...\"] },\n  \"commercial_demand\": { \"spending_categories\": [\"...\"], \"relevant_industries\": [\"...\"], \"market_attractiveness\": \"...\", \"growth_potential\": \"...\" },\n  \"reasoning\": \"...\",\n  \"evidence\": [{ \"claim\": \"...\", \"basis\": \"...\", \"status\": \"VERIFIED|ESTIMATE|INFERENCE|ASSUMPTION\" }],\n  \"assumptions\": [\"...\"],\n  \"confidence\": 0.85\n}\n\nReturn ONLY raw valid JSON matching this schema without markdown code blocks.",
+          "enableStreaming": false
+        }
+      },
+      "id": "563e049a-00ba-4819-a8ae-05b4925971df",
+      "name": "Demand Analyst",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "1e573829-78fe-4fe7-addf-88ce2bcc4a41",
+      "name": "Groq Llama 3.3 70B",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        448,
+        336
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.output || item.text || item;\nlet data = null;\n\nif (typeof raw === \"object\" && raw !== null) {\n  data = raw;\n} else if (typeof raw === \"string\") {\n  let cleaned = raw.trim().replace(/^\\`\\`\\`(?:json)?\\s*/i, \"\").replace(/\\s*\\`\\`\\`$/i, \"\").trim();\n  try {\n    data = JSON.parse(cleaned);\n  } catch (e1) {\n    const match = cleaned.match(/\\{[\\s\\S]*/);\n    if (match) {\n      let candidate = match[0];\n      const qm = candidate.match(/(?<!\\\\)\"/g) || [];\n      if (qm.length % 2 !== 0) candidate += '\"';\n      let ob = (candidate.match(/\\{/g) || []).length;\n      let cb = (candidate.match(/\\}/g) || []).length;\n      let obk = (candidate.match(/\\[/g) || []).length;\n      let cbk = (candidate.match(/\\]/g) || []).length;\n      while (cbk < obk) { candidate += ']'; cbk++; }\n      while (cb < ob) { candidate += '}'; cb++; }\n      try {\n        data = JSON.parse(candidate);\n      } catch (e2) {\n        candidate = match[0].replace(/,\\s*\"[^\"]*\"\\s*:\\s*\"?[^\"}]*$/, \"\");\n        let ob2 = (candidate.match(/\\{/g) || []).length;\n        let cb2 = (candidate.match(/\\}/g) || []).length;\n        let obk2 = (candidate.match(/\\[/g) || []).length;\n        let cbk2 = (candidate.match(/\\]/g) || []).length;\n        while (cbk2 < obk2) { candidate += ']'; cbk2++; }\n        while (cb2 < ob2) { candidate += '}'; cb2++; }\n        try { data = JSON.parse(candidate); } catch (e3) { data = {}; }\n      }\n    } else {\n      data = {};\n    }\n  }\n}\n\nconst content = (data && data.output) ? data.output : (data || {});\nreturn [{ json: { output: content } }];"
+      },
+      "id": "cd65840b-3fde-4583-b8a2-c56d12d8c13b",
+      "name": "Parse Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "When Called by Commander": {
+      "main": [
+        [
+          {
+            "node": "Demand Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Llama 3.3 70B": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Demand Analyst",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demand Analyst": {
+      "main": [
+        [
+          {
+            "node": "Parse Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

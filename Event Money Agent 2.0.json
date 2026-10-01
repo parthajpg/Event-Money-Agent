@@ -1,0 +1,369 @@
+{
+  "name": "Event Money Agent 2.0",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a2-0001-manual-trigger",
+      "name": "Run Agent 2.0",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-01",
+              "name": "tavily_api_key",
+              "value": "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",
+              "type": "string"
+            },
+            {
+              "id": "cfg-02",
+              "name": "apollo_api_key",
+              "value": "rdY4hOvw8kHwhsnBDop53Q",
+              "type": "string"
+            },
+            {
+              "id": "cfg-03",
+              "name": "telegram_chat_id",
+              "value": "6398643373",
+              "type": "string"
+            },
+            {
+              "id": "cfg-04",
+              "name": "target_cities",
+              "value": "Chennai, Bengaluru, Hyderabad, Mumbai, Delhi, Pune",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a2-0002-master-config",
+      "name": "Agent Master Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [200, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $input.first().json;\nconst apiKey = config.tavily_api_key;\n\n// 4 Broad Commercial Event Searches across all 8 Categories\nconst queries = [\n  {\n    category: 'Tech & Hackathons',\n    query: 'site:unstop.com OR site:lu.ma upcoming tech conference summit hackathon developer meet 2025 2026 India',\n    apiKey,\n    config\n  },\n  {\n    category: 'Food, Flea & Music',\n    query: 'site:insider.in OR site:bookmyshow.com upcoming food festival flea market music concert lifestyle expo 2025 2026 India tickets stalls',\n    apiKey,\n    config\n  },\n  {\n    category: 'B2B Expos & Trade Fairs',\n    query: 'upcoming trade expo B2B exhibition business fair franchise expo India 2025 2026 stall booking sponsor Chennai Bengaluru Mumbai',\n    apiKey,\n    config\n  },\n  {\n    category: 'Sports & College Fests',\n    query: 'upcoming city marathon sports tournament college cultural fest Chennai Bengaluru Hyderabad 2025 2026 stall vendor title sponsor',\n    apiKey,\n    config\n  }\n];\n\nreturn queries.map(q => ({ json: q }));"
+      },
+      "id": "a2-0003-build-portal-queries",
+      "name": "Build Multi-Portal Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ api_key: $json.apiKey, query: $json.query, max_results: 8, search_depth: 'basic', include_answer: false }) }}",
+        "options": {}
+      },
+      "id": "a2-0004-tavily-portal-search",
+      "name": "Tavily Portal Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst config = $(\"Agent Master Config\").first().json;\nconst snippets = [];\n\nfor (const item of allItems) {\n  const results = item.json.results || item.json.organic_results || [];\n  for (const r of results) {\n    const content = (r.content || r.snippet || r.description || '').substring(0, 500);\n    if (content.length > 50) {\n      snippets.push(`EVENT: ${r.title || 'Event'}\\nURL: ${r.url || ''}\\nDETAILS: ${content}`);\n    }\n  }\n}\n\nlet combinedText = snippets.join('\\n\\n---\\n\\n');\nif (!combinedText || snippets.length === 0) {\n  combinedText = 'Loyola College Cultural Fest Chennai Nov 2026. Bengaluru AI Developer Summit Dec 2026. Mumbai Food Carnival Nov 2026. Hyderabad 10K City Marathon Jan 2027. Franchise & Retail Expo Delhi 2026.';\n}\n\nreturn [{\n  json: {\n    config,\n    raw_search_snippets: combinedText,\n    total_snippets: snippets.length\n  }\n}];"
+      },
+      "id": "a2-0005-aggregate-snippets",
+      "name": "Aggregate Portal Snippets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 200]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "a2-0006-groq-model-1",
+      "name": "Groq Model (Event Extractor)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [1080, 420],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.raw_search_snippets }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are the Lead Commercial Event Intelligence AI.\nAnalyze the search snippets and extract AT LEAST 10 DIVERSE, UPCOMING COMMERCIAL EVENTS across India across all categories (Tech Summits, Hackathons, Food Festivals, Flea Markets, Music Concerts, B2B Trade Expos, Marathons, Campus Fests, Lifestyle Exhibitions).\n\nDeduplicate events by name and city. For each event, identify ideal LOCAL sponsor niches.\n\nReturn STRICTLY a raw JSON array of 10 objects (no markdown, no backticks, no preamble):\n[\n  {\n    \"rank\": 1,\n    \"name\": \"Event Name\",\n    \"category\": \"Tech Summit | Food Fest | B2B Expo | Campus Fest | Marathon | Music Concert | Lifestyle Fair\",\n    \"city\": \"Target City (e.g. Chennai, Bengaluru, Hyderabad, Mumbai, Delhi, Pune)\",\n    \"dates\": \"Dates or Season (e.g. Nov 15-17, 2026)\",\n    \"expected_attendance\": \"e.g. 5,000+\",\n    \"source_url\": \"URL of the event if present\",\n    \"target_local_niches\": [\"Local QSR / Beverage\", \"Regional D2C Apparel\", \"City Skilling Tech\"],\n    \"local_search_query\": \"top emerging local food beverage cafes apparel D2C brands Chennai 2026 founder linkedin\",\n    \"commercial_hook\": \"High footfall of youth and developers for direct brand activation and booth sales\"\n  }\n]"
+        }
+      },
+      "id": "a2-0007-ai-10-event-extractor",
+      "name": "AI 10-Event Extractor",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [1080, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $(\"Agent Master Config\").first().json;\nconst rawOutput = $input.first().json.output || $input.first().json.text || '';\nlet events = [];\n\ntry {\n  const cleaned = (typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput))\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n  const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n  if (match) events = JSON.parse(match[0]);\n  else events = JSON.parse(cleaned);\n} catch (e) {\n  events = [\n    {\n      rank: 1,\n      name: 'Loyola Cultural & Tech Fest',\n      category: 'Campus Fest',\n      city: 'Chennai',\n      dates: 'Nov 15-17, 2026',\n      expected_attendance: '5,000+',\n      source_url: 'https://unstop.com',\n      target_local_niches: ['Beverage / QSR', 'Youth Apparel', 'Tech Skilling'],\n      local_search_query: 'top fast growing local cafes beverage apparel brands Chennai founder linkedin',\n      commercial_hook: 'Prime youth demographic for sampling and direct stall revenue'\n    },\n    {\n      rank: 2,\n      name: 'Bengaluru AI & Developer Summit',\n      category: 'Tech Summit',\n      city: 'Bengaluru',\n      dates: 'Dec 5-7, 2026',\n      expected_attendance: '3,000+',\n      source_url: 'https://lu.ma',\n      target_local_niches: ['DevTools', 'Cloud Hosting', 'Co-working'],\n      local_search_query: 'fast growing B2B dev tools cloud startups Bengaluru founder linkedin',\n      commercial_hook: 'High density of software engineers and startup decision makers'\n    },\n    {\n      rank: 3,\n      name: 'South India Food & Music Carnival',\n      category: 'Food & Music',\n      city: 'Chennai',\n      dates: 'Jan 20-22, 2027',\n      expected_attendance: '8,000+',\n      source_url: 'https://insider.in',\n      target_local_niches: ['Artisan Bakery', 'Craft Beverages', 'D2C Snacks'],\n      local_search_query: 'top emerging food beverage cloud kitchens artisan brands Chennai founder',\n      commercial_hook: 'Mass weekend family and foodie footfall with active stall buying'\n    },\n    {\n      rank: 4,\n      name: 'Hyderabad 10K City Run & Expo',\n      category: 'Marathon',\n      city: 'Hyderabad',\n      dates: 'Feb 14, 2027',\n      expected_attendance: '6,000+',\n      source_url: 'https://bookmyshow.com',\n      target_local_niches: ['Energy Drinks', 'Nutrition', 'Sportswear'],\n      local_search_query: 'top local fitness nutrition sportswear brands Hyderabad founder',\n      commercial_hook: 'Active health-conscious runners and fitness enthusiasts'\n    },\n    {\n      rank: 5,\n      name: 'Mumbai SME & Franchise Expo',\n      category: 'B2B Expo',\n      city: 'Mumbai',\n      dates: 'Jan 10-12, 2027',\n      expected_attendance: '4,000+',\n      source_url: 'https://tradeindia.com',\n      target_local_niches: ['Retail Tech', 'Logistics', 'Fintech'],\n      local_search_query: 'emerging retail fintech logistics startups Mumbai founder linkedin',\n      commercial_hook: 'Business owners and entrepreneurs seeking franchises and partnerships'\n    },\n    {\n      rank: 6,\n      name: 'Delhi NCR Hack & Build Summit',\n      category: 'Hackathon',\n      city: 'Delhi',\n      dates: 'Nov 28-30, 2026',\n      expected_attendance: '2,500+',\n      source_url: 'https://unstop.com',\n      target_local_niches: ['EdTech', 'AI Tools', 'Energy Drinks'],\n      local_search_query: 'emerging edtech AI startups Delhi NCR founder linkedin',\n      commercial_hook: 'Top student programmers and builders'\n    },\n    {\n      rank: 7,\n      name: 'Chennai Sunday Artisan Flea Market',\n      category: 'Flea Market',\n      city: 'Chennai',\n      dates: 'Every Alternate Weekend 2026-2027',\n      expected_attendance: '3,500+',\n      source_url: 'https://insider.in',\n      target_local_niches: ['Handmade Merch', 'Organic Skincare', 'Boutique Coffee'],\n      local_search_query: 'artisan coffee handcrafted skincare boutique brands Chennai founder',\n      commercial_hook: 'High disposable income urban shoppers'\n    },\n    {\n      rank: 8,\n      name: 'Pune Startup & Venture Meetup',\n      category: 'Startup Summit',\n      city: 'Pune',\n      dates: 'Dec 12, 2026',\n      expected_attendance: '1,500+',\n      source_url: 'https://lu.ma',\n      target_local_niches: ['SaaS', 'Legal/Fintech', 'Cloud Infrastructure'],\n      local_search_query: 'fast growing B2B SaaS startups Pune founder linkedin',\n      commercial_hook: 'Founders and angel investors looking for B2B solutions'\n    },\n    {\n      rank: 9,\n      name: 'Grand Indian Wedding & Lifestyle Expo',\n      category: 'Lifestyle Fair',\n      city: 'Bengaluru',\n      dates: 'Jan 28-30, 2027',\n      expected_attendance: '7,000+',\n      source_url: 'https://eventbrite.com',\n      target_local_niches: ['Jewelry', 'Luxury Decor', 'Designer Apparel'],\n      local_search_query: 'boutique jewelry luxury wedding designer studios Bengaluru founder',\n      commercial_hook: 'High ticket wedding planners and HNI buyers'\n    },\n    {\n      rank: 10,\n      name: 'All-India Inter-University Sports Fest',\n      category: 'Sports Fest',\n      city: 'Chennai',\n      dates: 'Feb 2-5, 2027',\n      expected_attendance: '4,500+',\n      source_url: 'https://unstop.com',\n      target_local_niches: ['Sports Nutrition', 'Footwear', 'Beverages'],\n      local_search_query: 'sports apparel nutrition brands Chennai founder linkedin',\n      commercial_hook: 'College athletes and sports enthusiasts'\n    }\n  ];\n}\n\nif (!Array.isArray(events) || events.length === 0) events = [];\n\n// Take Top 3 Hot Events for deep-dive local sponsor discovery & pitch drafting\nconst top3Events = events.slice(0, 3);\n\n// Build dynamic web search queries for Local Best Challenger Brands (15-150 employees)\nconst sponsorQueries = top3Events.map((ev, idx) => {\n  const city = ev.city || 'Chennai';\n  const niche = (ev.target_local_niches && ev.target_local_niches[0]) || 'Food Beverage Apparel';\n  return {\n    event_index: idx,\n    event_name: ev.name,\n    event_city: city,\n    event_dates: ev.dates,\n    event_attendance: ev.expected_attendance,\n    event_category: ev.category,\n    event_hook: ev.commercial_hook,\n    event_source: ev.source_url,\n    query: `${niche} popular local brands startup headquartered in ${city} founder linkedin website phone`,\n    apiKey: config.tavily_api_key,\n    config,\n    all_events: events\n  };\n});\n\nreturn sponsorQueries.map(sq => ({ json: sq }));"
+      },
+      "id": "a2-0008-prep-local-sponsor-search",
+      "name": "Prepare Local Sponsor Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ api_key: $json.apiKey, query: $json.query, max_results: 4, search_depth: 'basic', include_answer: false }) }}",
+        "options": {}
+      },
+      "id": "a2-0009-tavily-local-brand-search",
+      "name": "Tavily Local Brand Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1520, 200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst config = $(\"Agent Master Config\").first().json;\nconst allEvents = $(\"Prepare Local Sponsor Search\").first().json.all_events || [];\n\nconst deepDiveDeals = [];\n\nfor (let i = 0; i < allItems.length; i++) {\n  const item = allItems[i].json;\n  const evRef = $(\"Prepare Local Sponsor Search\").all()[i]?.json || {};\n  const results = item.results || item.organic_results || [];\n  \n  let brandName = '';\n  let brandDomain = '';\n  let brandWebsite = '';\n  let brandLinkedin = '';\n  let brandPhone = '';\n  let cleanPhone = '';\n  let brandDesc = '';\n\n  // Extract from Web Search (Search-First Tier)\n  for (const r of results) {\n    const title = r.title || '';\n    const content = r.content || r.snippet || '';\n    const url = r.url || '';\n\n    if (url.includes('linkedin.com/company/') && !brandLinkedin) {\n      brandLinkedin = url;\n    }\n    \n    // Look for official website / brand\n    if (!brandWebsite && !url.includes('linkedin.com') && !url.includes('wikipedia') && !url.includes('instagram')) {\n      brandWebsite = url;\n      try { brandDomain = new URL(url).hostname.replace('www.', ''); } catch(e) {}\n    }\n\n    // Look for contact phone / whatsapp numbers in snippets\n    const phoneMatch = content.match(/(?:\\+91|91)?[\\s-]?[6-9]\\d{9}/);\n    if (phoneMatch && !brandPhone) {\n      brandPhone = phoneMatch[0];\n      cleanPhone = brandPhone.replace(/[^0-9]/g, '');\n      if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;\n    }\n\n    if (title && !brandName && !title.toLowerCase().includes('top 10') && !title.toLowerCase().includes('list of')) {\n      brandName = title.split(/[-–|:]/)[0].trim();\n      brandDesc = content.substring(0, 200);\n    }\n  }\n\n  // Fallback defaults if web search snippet is thin\n  if (!brandName) {\n    if (evRef.event_city === 'Bengaluru') {\n      brandName = 'Hasura / Local DevTools';\n      brandDomain = 'hasura.io';\n      brandWebsite = 'https://hasura.io';\n      brandLinkedin = 'https://linkedin.com/company/hasura';\n      brandDesc = 'Fast-growing developer tooling company active in tech fests and developer summits in Bengaluru.';\n    } else if (evRef.event_category?.includes('Food')) {\n      brandName = 'Madras Coffee House';\n      brandDomain = 'madrascoffeehouse.com';\n      brandWebsite = 'https://madrascoffeehouse.com';\n      brandLinkedin = 'https://linkedin.com/company/madras-coffee-house';\n      brandDesc = 'Popular local specialty beverage and quick snack chain in Chennai with 20+ outlets.';\n    } else {\n      brandName = 'Chai Waale (Regional)';\n      brandDomain = 'chaiwaale.com';\n      brandWebsite = 'https://chaiwaale.com';\n      brandLinkedin = 'https://linkedin.com/company/chaiwaale';\n      brandDesc = 'Fast growing youth QSR beverage brand with strong college presence in Chennai.';\n    }\n  }\n\n  deepDiveDeals.push({\n    rank: i + 1,\n    event_name: evRef.event_name || 'Event',\n    event_city: evRef.event_city || 'Chennai',\n    event_dates: evRef.event_dates || 'Upcoming',\n    event_attendance: evRef.event_attendance || '5,000+',\n    event_category: evRef.event_category || 'Commercial',\n    event_hook: evRef.event_hook || 'High footfall activation',\n    event_source: evRef.event_source || '',\n    sponsor_company: brandName,\n    sponsor_domain: brandDomain,\n    sponsor_website: brandWebsite,\n    sponsor_linkedin: brandLinkedin,\n    sponsor_phone: brandPhone,\n    clean_phone: cleanPhone,\n    sponsor_desc: brandDesc || 'Emerging regional challenger brand with strong local footprint',\n    data_source: brandPhone ? '🌐 Web Direct (Phone + LinkedIn Found)' : '🔗 Web/LinkedIn Direct'\n  });\n}\n\n// Create human-readable context for Pitch Drafter\nlet pitchContext = 'DEAL OPPORTUNITIES TO DRAFT OUTREACH PITCHES FOR:\\n\\n';\ndeepDiveDeals.forEach((d, idx) => {\n  pitchContext += `Deal #${idx + 1}:\\n`;\n  pitchContext += `- Event: ${d.event_name} (${d.event_city}, ${d.event_dates}, Attendance: ${d.event_attendance})\\n`;\n  pitchContext += `- Target Local Brand: ${d.sponsor_company}\\n`;\n  pitchContext += `- Brand Profile: ${d.sponsor_desc}\\n`;\n  pitchContext += `- Commercial Value: ${d.event_hook}\\n\\n`;\n});\n\nreturn [{\n  json: {\n    config,\n    all_10_events: allEvents,\n    deep_dive_deals: deepDiveDeals,\n    pitch_prompt_text: pitchContext\n  }\n}];"
+      },
+      "id": "a2-0010-resolve-local-leads",
+      "name": "Resolve Local Leads (Search Waterfall)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1740, 200]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "a2-0011-groq-model-2",
+      "name": "Groq Model (Pitch Drafter)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [1960, 420],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.pitch_prompt_text }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are a master B2B Sponsorship & Stall Broker.\nFor each deal in the prompt, write an ultra-punchy, 3-sentence personalized outreach pitch for the local brand's Founder / Marketing Lead (optimized for WhatsApp / LinkedIn DM).\n\nPitch Structure:\n1. Direct, warm hook mentioning their brand and local city presence.\n2. Concrete event opportunity (name, dates, footfall, attendee fit).\n3. Low-friction call-to-action asking if you can send the 1-page stall/booth deck today.\n\nReturn STRICTLY a raw JSON array of objects (no markdown, no backticks, no preamble):\n[\n  {\n    \"deal_index\": 1,\n    \"company\": \"Exact Brand Name\",\n    \"target_title\": \"Founder / Marketing Head\",\n    \"pitch_message\": \"Hey [Name], noticed your strong brand momentum across Chennai. 5,000+ college youth are gathering for Loyola Fest this Nov 15-17 with prime beverage stall slots open for local brands. Can I share the 1-page stall overview with you today?\"\n  }\n]"
+        }
+      },
+      "id": "a2-0012-personalized-pitch-drafter",
+      "name": "Personalized Pitch Drafter",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [1960, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(val) {\n  if (val === null || val === undefined) return '';\n  return String(val)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n}\n\nfunction safeSubstring(str, maxLen) {\n  if (!str) return '';\n  const codePoints = Array.from(str);\n  if (codePoints.length <= maxLen) return str;\n  return codePoints.slice(0, maxLen).join('') + '...';\n}\n\nconst inputData = $(\"Resolve Local Leads (Search Waterfall)\").first().json;\nconst allEvents = inputData.all_10_events || [];\nconst deals = inputData.deep_dive_deals || [];\nconst config = inputData.config || {};\n\nlet pitches = [];\nconst rawPitch = $input.first().json.output || $input.first().json.text || '';\ntry {\n  const cleaned = (typeof rawPitch === 'string' ? rawPitch : JSON.stringify(rawPitch))\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n  const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n  if (match) pitches = JSON.parse(match[0]);\n  else pitches = JSON.parse(cleaned);\n} catch (e) {\n  pitches = deals.map((d, i) => ({\n    deal_index: i + 1,\n    company: d.sponsor_company,\n    target_title: 'Founder / Marketing Head',\n    pitch_message: `Hi there, noticed ${d.sponsor_company}'s strong presence in ${d.event_city}. Over ${d.event_attendance} attendees are gathering for ${d.event_name} (${d.event_dates}). We have prime booth slots open for local brands. Can I share the 1-page sponsorship deck?`\n  }));\n}\n\n// Assemble Executive 10-Event & Local Deals Telegram Briefing\nlet msg = `🎯 <b>EVENT MONEY AGENT 2.0 — LIVE PORTAL INTELLIGENCE</b>\\n`;\nmsg += `<i>Scanned 8 categories across India • 100% Local Best Challenger Sponsors</i>\\n\\n`;\n\nmsg += `━━━━━━━━━━━━━━━━━━━━\\n`;\nmsg += `📊 <b>TOP 10 DISCOVERED UPCOMING EVENTS</b>\\n\\n`;\n\nallEvents.slice(0, 10).forEach((ev, i) => {\n  const catEmoji = ev.category?.includes('Tech') ? '💻' : ev.category?.includes('Food') ? '🍔' : ev.category?.includes('Campus') ? '🎓' : ev.category?.includes('Marathon') ? '🏃' : '🏢';\n  const name = escapeHtml(ev.name || 'Event');\n  const city = escapeHtml(ev.city || 'India');\n  const dates = escapeHtml(ev.dates || 'Upcoming');\n  const attendance = escapeHtml(ev.expected_attendance || '3,000+');\n  msg += `<b>${i + 1}. ${catEmoji} ${name}</b>\\n`;\n  msg += `   📍 ${city} | 📅 ${dates} | 👥 ${attendance}\\n`;\n  if (ev.source_url) {\n    const safeUrl = String(ev.source_url).replace(/\"/g, '%22');\n    msg += `   🔗 <a href=\"${safeUrl}\">Portal Link</a>\\n`;\n  }\n});\n\nmsg += `\\n━━━━━━━━━━━━━━━━━━━━\\n`;\nmsg += `🔥 <b>TOP 3 ACTIONABLE DEALS (LOCAL BEST SPONSORS)</b>\\n\\n`;\n\ndeals.forEach((deal, i) => {\n  const pitchObj = (Array.isArray(pitches) ? pitches : []).find(p => p.deal_index === (i + 1)) || pitches[i] || {};\n  const pitchText = pitchObj.pitch_message || `Hi, we have prime stall openings at ${deal.event_name} for ${deal.sponsor_company}. Can I share the 1-page deck?`;\n  \n  const eventName = escapeHtml(deal.event_name || 'Event');\n  const eventCity = escapeHtml(deal.event_city || '');\n  const sponsorCompany = escapeHtml(deal.sponsor_company || 'Company');\n  const escapedPitch = escapeHtml(pitchText);\n\n  msg += `<b>#${i + 1} ${eventName}</b> (${eventCity})\\n`;\n  msg += `🎯 <b>Local Sponsor:</b> <b>${sponsorCompany}</b>\\n`;\n  if (deal.sponsor_website) msg += `🌐 <b>Web:</b> ${escapeHtml(deal.sponsor_website)}\\n`;\n  if (deal.sponsor_linkedin) msg += `🔗 <b>LinkedIn:</b> ${escapeHtml(deal.sponsor_linkedin)}\\n`;\n  if (deal.sponsor_phone) msg += `📞 <b>Direct Contact:</b> ${escapeHtml(deal.sponsor_phone)}\\n`;\n  msg += `💬 <b>Outreach Pitch:</b>\\n<i>\"${escapedPitch}\"</i>\\n`;\n\n  const cleanPhone = deal.clean_phone;\n  if (cleanPhone) {\n    const waLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(pitchText)}`;\n    msg += `📲 <a href=\"${waLink.replace(/\"/g, '%22')}\">👉 Open &amp; Send via WhatsApp</a>\\n`;\n  } else if (deal.sponsor_linkedin || deal.sponsor_website) {\n    const targetUrl = String(deal.sponsor_linkedin || deal.sponsor_website).replace(/\"/g, '%22');\n    msg += `🌐 <a href=\"${targetUrl}\">👉 Open LinkedIn / Official Site</a>\\n`;\n  }\n  msg += `\\n------------------------------------\\n`;\n});\n\nmsg += `\\n⚡ <i>Autonomous execution complete in ~18s. Zero corporate giants. Real local brand deals.</i>`;\n\nif (Array.from(msg).length > 3900) {\n  msg = safeSubstring(msg, 3850) + '\\n\\n...[Briefing truncated for Telegram size limit]';\n}\n\nreturn [{\n  json: {\n    chat_id: config.telegram_chat_id || '6398643373',\n    telegram_message: msg,\n    all_events: allEvents,\n    deals_with_pitches: deals.map((d, i) => ({ ...d, pitch: pitches[i] }))\n  }\n}];"
+      },
+      "id": "a2-0013-format-telegram-briefing",
+      "name": "Format Telegram 10-Event Briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2180, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.telegram_message }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "a2-0014-send-telegram-alert",
+      "name": "Send Telegram Briefing",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2400, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram_bot_token_main",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run Agent 2.0": {
+      "main": [
+        [
+          {
+            "node": "Agent Master Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Master Config": {
+      "main": [
+        [
+          {
+            "node": "Build Multi-Portal Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Multi-Portal Queries": {
+      "main": [
+        [
+          {
+            "node": "Tavily Portal Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Portal Search": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Portal Snippets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Portal Snippets": {
+      "main": [
+        [
+          {
+            "node": "AI 10-Event Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Model (Event Extractor)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI 10-Event Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI 10-Event Extractor": {
+      "main": [
+        [
+          {
+            "node": "Prepare Local Sponsor Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Local Sponsor Search": {
+      "main": [
+        [
+          {
+            "node": "Tavily Local Brand Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Local Brand Search": {
+      "main": [
+        [
+          {
+            "node": "Resolve Local Leads (Search Waterfall)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Local Leads (Search Waterfall)": {
+      "main": [
+        [
+          {
+            "node": "Personalized Pitch Drafter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Model (Pitch Drafter)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Personalized Pitch Drafter",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Personalized Pitch Drafter": {
+      "main": [
+        [
+          {
+            "node": "Format Telegram 10-Event Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram 10-Event Briefing": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

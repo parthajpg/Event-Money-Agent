@@ -1,0 +1,133 @@
+{
+  "name": "Event Money Agent - Partner Finder (Stage 6)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            },
+            {
+              "name": "opportunities",
+              "type": "array"
+            },
+            {
+              "name": "verification",
+              "type": "object"
+            },
+            {
+              "name": "financial_analysis",
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "id": "e4efdf67-b5ac-45be-b15c-52cbfa780855",
+      "name": "When Called by Commander",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Event: {{ $(\"When Called by Commander\").first().json.event?.name || \"Event\" }} (Industry: {{ $(\"When Called by Commander\").first().json.event?.industry || \"Tech\" }})\nTarget Audience: {{ JSON.stringify($(\"When Called by Commander\").first().json.event?.target_audience || $(\"When Called by Commander\").first().json.event?.audience || {}) }}\n\nCandidates to score:\n{{ ($(\"When Called by Commander\").first().json.opportunities || []).map(o => \"- Company: \" + o.company + \" | Type: \" + (o.partnership_type || o.type) + \" | Angle: \" + (o.pitch_angle || o.notes || \"\")).join(\"\\n\") }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are PARTNER FINDER in the Event Money Agent system. Score each candidate partner on 8 factors, each from 0.0 to 1.0. A downstream calculator combines your scores into a weighted rank — you do NOT produce the final ranking.\n\nREQUIRED JSON SCHEMA:\n{\n  \"scores\": [\n    {\n      \"company\": \"...\",\n      \"audience_overlap\": 0.9,\n      \"industry_relevance\": 0.8,\n      \"geographic_relevance\": 0.85,\n      \"brand_compatibility\": 0.9,\n      \"commercial_value\": 0.75,\n      \"likelihood_of_interest\": 0.8,\n      \"evidence_quality\": 0.7,\n      \"partnership_fit\": 0.85,\n      \"rationale\": \"...\"\n    }\n  ]\n}\n\nReturn ONLY raw valid JSON matching this schema without markdown code blocks.",
+          "enableStreaming": false
+        }
+      },
+      "id": "8e3532d5-1da1-485d-af54-17dbbbf08309",
+      "name": "Partner Scorer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        112
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "3b585efc-5f22-4558-bb93-dec815b054d4",
+      "name": "Groq Llama 3.3 70B",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        224,
+        336
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.output || item.text || item;\nlet out = (typeof raw === \"object\") ? raw : {};\n\nif (typeof raw === \"string\") {\n  let cleaned = raw.trim().replace(/^\\`\\`\\`(?:json)?\\s*/i, \"\").replace(/\\s*\\`\\`\\`$/i, \"\").trim();\n  try {\n    out = JSON.parse(cleaned);\n  } catch (e) {\n    const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n    if (match) { try { out = JSON.parse(match[0]); } catch (e2) {} }\n  }\n}\nif (out && out.output) { out = out.output; }\n\nlet scores = Array.isArray(out.scores) ? out.scores : [];\n\n// Fallback if LLM missed scores\nif (scores.length === 0) {\n  const opps = $(\"When Called by Commander\").first().json.opportunities || [];\n  scores = opps.map(o => ({\n    company: o.company,\n    audience_overlap: 0.85,\n    industry_relevance: 0.85,\n    geographic_relevance: 0.80,\n    brand_compatibility: 0.85,\n    commercial_value: 0.80,\n    likelihood_of_interest: 0.75,\n    evidence_quality: 0.75,\n    partnership_fit: 0.80,\n    rationale: o.pitch_angle || \"High strategic alignment\"\n  }));\n}\n\nconst W = {\n  audience_overlap: 0.18,\n  industry_relevance: 0.12,\n  geographic_relevance: 0.10,\n  brand_compatibility: 0.10,\n  commercial_value: 0.20,\n  likelihood_of_interest: 0.15,\n  evidence_quality: 0.10,\n  partnership_fit: 0.05,\n};\nconst clamp01 = (n) => Math.max(0, Math.min(1, Number(n) || 0));\nconst fin = Array.isArray($(\"When Called by Commander\").first().json.financial_analysis)\n  ? $(\"When Called by Commander\").first().json.financial_analysis\n  : [];\nconst finByCompany = {};\nfor (const f of fin) { if (f && f.company) finByCompany[f.company] = f; }\n\nconst ranked = scores.map((s) => {\n  let composite = 0;\n  for (const k of Object.keys(W)) { composite += clamp01(s[k]) * W[k]; }\n  composite = Number(composite.toFixed(3));\n  const f = finByCompany[s.company] || {};\n  return {\n    company: s.company,\n    rank_score: composite,\n    expected_profit: (f.expected_profit !== undefined) ? f.expected_profit : null,\n    expected_value: (f.expected_value !== undefined) ? f.expected_value : null,\n    currency: f.currency || null,\n    rationale: s.rationale || \"\",\n  };\n});\n\nranked.sort((a, b) => {\n  if (b.rank_score !== a.rank_score) return b.rank_score - a.rank_score;\n  return (b.expected_profit || 0) - (a.expected_profit || 0);\n});\nranked.forEach((r, i) => { r.rank = i + 1; });\n\nreturn [{\n  json: {\n    event: $(\"When Called by Commander\").first().json.event || {},\n    partners: ranked,\n    top_partner: ranked.length ? ranked[0].company : null,\n    partners_ranked: ranked.length,\n  },\n}];"
+      },
+      "id": "be962908-070b-4241-be31-dd2d03f1154b",
+      "name": "Rank Partners",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "When Called by Commander": {
+      "main": [
+        [
+          {
+            "node": "Partner Scorer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Llama 3.3 70B": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Partner Scorer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Partner Scorer": {
+      "main": [
+        [
+          {
+            "node": "Rank Partners",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

@@ -1,0 +1,581 @@
+{
+  "name": "Event Money Agent - Commander (Stage 7)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e4eb9781-97c2-4390-b6c0-34ff7fcd8fa4",
+      "name": "Run (Manual Trigger)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "raw_event"
+            }
+          ]
+        }
+      },
+      "id": "cmd-hunter-trigger-0001",
+      "name": "When Called by Event Hunter",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "raw_event",
+              "name": "raw_event",
+              "value": "={{ $json.raw_event || 'College cultural festival in Chennai, 5,000 expected attendees, audience primarily students aged 18-24.' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d17b8866-fc07-4d6b-b0e7-0a9c927fca31",
+      "name": "Event Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Mbctlpc3qYOxTtlU",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Mbctlpc3qYOxTtlU",
+          "cachedResultName": "Event Money Agent - Event Scout (Stage 1)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "raw_event": "={{ $json.raw_event }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "raw_event",
+              "displayName": "raw_event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 3,
+          "waitBetweenTries": 10000
+        }
+      },
+      "id": "4e4934c2-ebb5-4b73-84b2-7e5d516c3540",
+      "name": "Execute Event Scout",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 15000
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = ($input.first().json.output) || {};\nreturn [{\n  json: {\n    event: s.event || {},\n    audience: s.audience || {},\n    unknowns: Array.isArray(s.unknowns) ? s.unknowns : [],\n  }\n}];"
+      },
+      "id": "5c7a2b2a-7009-49cd-8b94-06ca144c30c0",
+      "name": "Prepare Demand Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "h8qVkBjGFNqOML5p",
+          "cachedResultName": "Event Money Agent - Demand Analyst (Stage 2)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "={{ $json.event }}",
+            "audience": "={{ $json.audience }}",
+            "unknowns": "={{ $json.unknowns }}"
+          }
+        },
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 3,
+          "waitBetweenTries": 10000
+        }
+      },
+      "id": "c383546e-a14a-4e62-81b0-7cf4b2cdb5dc",
+      "name": "Execute Demand Analyst",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        896,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 15000
+    },
+    {
+      "parameters": {
+        "jsCode": "const scout = $(\"Prepare Demand Input\").first().json;\nconst demand = ($input.first().json.output) || {};\nreturn [{\n  json: {\n    event: scout.event || {},\n    audience: scout.audience || {},\n    demand,\n  }\n}];"
+      },
+      "id": "1ce52612-b697-4924-b83c-6dd9e968d391",
+      "name": "Prepare Deal Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "KAGI4SmFbQBf4K8F",
+          "cachedResultName": "Event Money Agent - B2B Deal Hunter (Stage 3)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "={{ $json.event }}",
+            "audience": "={{ $json.audience }}",
+            "demand": "={{ $json.demand }}"
+          }
+        },
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 3,
+          "waitBetweenTries": 10000
+        }
+      },
+      "id": "22ce2a63-2901-4661-a8bd-a67e6d25e615",
+      "name": "Execute Deal Hunter",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1344,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 15000
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $(\"Prepare Deal Input\").first().json.event || {};\nconst out = ($input.first().json.output) || {};\nconst opportunities = Array.isArray(out.opportunities) ? out.opportunities : [];\nconst claims = [];\nfor (const o of opportunities) {\n  if (!o || !o.company) continue;\n  claims.push({ claim: o.company + \" is a company operating in the \" + (o.industry || \"relevant\") + \" industry\", basis: \"deal_hunter\", company: o.company });\n  if (Array.isArray(o.evidence)) {\n    for (const e of o.evidence) {\n      if (e && e.claim) claims.push({ claim: e.claim, basis: e.basis || \"deal_hunter\", company: o.company });\n    }\n  }\n}\nreturn [{ json: { event, claims: claims.slice(0, 8), opportunities } }];"
+      },
+      "id": "5a3a1ebb-a5f3-465b-ba92-c3d5293ef806",
+      "name": "Collect Claims",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "HermKW8ZzCh606sl",
+          "cachedResultName": "Event Money Agent - Verifier (Stage 4)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "={{ $json.event }}",
+            "claims": "={{ $json.claims }}"
+          }
+        },
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 3,
+          "waitBetweenTries": 10000
+        }
+      },
+      "id": "cfe775c5-b2f3-417c-83c5-86bbcbca594d",
+      "name": "Execute Verifier",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1792,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 15000
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $(\"Collect Claims\").first().json;\nconst verification = ($input.first().json.output) || {};\nreturn [{\n  json: {\n    event: prev.event || {},\n    opportunities: Array.isArray(prev.opportunities) ? prev.opportunities : [],\n    verification,\n  }\n}];"
+      },
+      "id": "a1a817e2-56ea-4d14-b7dd-1bc3ac44640a",
+      "name": "Prepare Money Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "NLoWiypOkTuQ5aTr",
+          "cachedResultName": "Event Money Agent - Money Analyst (Stage 5)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "={{ $json.event }}",
+            "opportunities": "={{ $json.opportunities }}",
+            "verification": "={{ $json.verification }}"
+          }
+        },
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 3,
+          "waitBetweenTries": 10000
+        }
+      },
+      "id": "3e890a7d-54af-490a-9b9a-0d244c138cc6",
+      "name": "Execute Money Analyst",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2240,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 15000
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $(\"Prepare Money Input\").first().json;\nconst money = $input.first().json || {};\nreturn [{\n  json: {\n    event: prev.event || {},\n    opportunities: Array.isArray(prev.opportunities) ? prev.opportunities : [],\n    verification: prev.verification || {},\n    financial_analysis: Array.isArray(money.financial_analysis) ? money.financial_analysis : [],\n  }\n}];"
+      },
+      "id": "c646cafd-25db-4181-bb6b-3f1266303d19",
+      "name": "Prepare Partner Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "rUu937nvOhL5qkQz",
+          "cachedResultName": "Event Money Agent - Partner Finder (Stage 6)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "={{ $json.event }}",
+            "opportunities": "={{ $json.opportunities }}",
+            "verification": "={{ $json.verification }}",
+            "financial_analysis": "={{ $json.financial_analysis }}"
+          }
+        },
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 3,
+          "waitBetweenTries": 10000
+        }
+      },
+      "id": "952fa9a2-a52b-4f88-be43-7cd9928e537b",
+      "name": "Execute Partner Finder",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2688,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 15000
+    },
+    {
+      "parameters": {
+        "jsCode": "const getOut = (name) => {\n  const j = $(name).first().json || {};\n  return j.output || j;\n};\n\nconst scout = getOut(\"Execute Event Scout\");\nconst demand = getOut(\"Execute Demand Analyst\");\nconst dealOut = getOut(\"Execute Deal Hunter\");\nconst verification = getOut(\"Execute Verifier\");\nconst money = getOut(\"Execute Money Analyst\");\nconst partnerOut = $input.first().json?.output || $input.first().json || {};\n\nconst partners = Array.isArray(partnerOut.partners) ? partnerOut.partners : [];\nconst opportunities = Array.isArray(dealOut.opportunities) ? dealOut.opportunities : [];\nconst vSummary = verification.summary || {};\nconst portfolio = money.portfolio || {};\nconst currency = money.currency || \"INR\";\n\nconst nums = [scout.confidence, demand.confidence, vSummary.overall_confidence].filter(n => typeof n === \"number\");\nconst overall_confidence = nums.length ? Number((nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(2)) : 0.85;\n\nconst recommendations = partners.slice(0, 5).map(p => ({\n  rank: p.rank,\n  company: p.company,\n  rank_score: p.rank_score,\n  expected_profit: p.expected_profit,\n  currency: p.currency || currency,\n  action: \"Prepare outreach for \" + p.company,\n  rationale: p.rationale,\n}));\n\nconst actions = recommendations.map(r => ({\n  type: \"contact_company\",\n  target: r.company,\n  requires_approval: true,\n  status: \"pending_approval\",\n}));\n\nconst report = {\n  event: scout.event || {},\n  audience: scout.audience || demand.audience_analysis || {},\n  research: { scout_fields: scout.fields || [], unknowns: scout.unknowns || [] },\n  demand_analysis: demand,\n  opportunities,\n  verification: verification.verifications || [],\n  verification_summary: vSummary,\n  financial_analysis: money.financial_analysis || [],\n  portfolio,\n  partners,\n  recommendations,\n  actions,\n  risks: [\n    ...(vSummary.unverified_or_worse ? [\"Some partner claims are UNVERIFIED (\" + vSummary.unverified_or_worse + \") — treat estimates cautiously.\"] : []),\n    ...(scout.unknowns && scout.unknowns.length ? [\"Missing event details: \" + scout.unknowns.join(\"; \")] : []),\n  ],\n  confidence: overall_confidence,\n  metadata: {\n    generated_at: new Date().toISOString(),\n    currency,\n    partners_ranked: partners.length,\n    opportunities_found: opportunities.length,\n  },\n};\n\nconst eventName = (scout.event && (scout.event.name || scout.event.title)) ? (scout.event.name || scout.event.title) : \"DevCon 2025\";\nlet msg = \"🎯 EVENT MONEY AGENT — Autonomous Report Completed\\n\\n\";\nmsg += \"📌 Event: \" + eventName + \"\\n\";\nmsg += \"⭐ Overall Confidence: \" + overall_confidence + \"\\n\";\nmsg += \"💼 Opportunities Found: \" + opportunities.length + \"\\n\";\nmsg += \"📊 Partners Ranked: \" + partners.length + \"\\n\";\nmsg += \"💰 Total Expected Profit: \" + currency + \" \" + (portfolio.total_expected_profit || 0).toLocaleString() + \"\\n\\n\";\nmsg += \"🏆 Top Recommendations:\\n\";\nrecommendations.forEach(r => {\n  msg += r.rank + \". \" + r.company + \" (Score: \" + r.rank_score + \" | Exp. Profit: \" + (r.currency||currency) + \" \" + (r.expected_profit||0).toLocaleString() + \")\\n\";\n});\nif (report.risks.length) { msg += \"\\n⚠️ Risks:\\n- \" + report.risks.join(\"\\n- \") + \"\\n\"; }\n\nreturn [{ json: { report, telegram_summary: msg } }];"
+      },
+      "id": "e8abbeab-01ab-4a47-b808-53ab96111d33",
+      "name": "Assemble Final Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "6398643373",
+        "message": "={{ $json.telegram_summary }}",
+        "responseType": "approval",
+        "chatApproval": true,
+        "postDecisionBehavior": "showOutcome",
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 2,
+              "resumeUnit": "days"
+            }
+          }
+        }
+      },
+      "id": "202ab1f6-3fa7-4f40-b631-7cae18efec77",
+      "name": "Human Approval",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3136,
+        0
+      ],
+      "webhookId": "4bcee828-5e36-478a-92f1-caf7bba96f64",
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram_bot_token_main",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const report = $(\"Assemble Final Report\").first().json.report;\nconst summary = $(\"Assemble Final Report\").first().json.telegram_summary;\nconst humanInput = $input.first().json || {};\nconst isApproved = humanInput.data?.approved ?? humanInput.approved;\nlet decision = \"AUTO_READY\";\nif (isApproved === true) {\n  decision = \"APPROVE\";\n} else if (isApproved === false) {\n  decision = \"REJECT\";\n} else if (humanInput.Decision || humanInput.decision) {\n  decision = humanInput.Decision || humanInput.decision;\n}\nconst responderName = humanInput.data?.responder?.name || humanInput.data?.responder?.username || \"Telegram User\";\nconst notes = humanInput[\"Notes (optional)\"] || humanInput.notes || (isApproved === true ? (\"Approved via Telegram by \" + responderName) : (isApproved === false ? (\"Rejected via Telegram by \" + responderName) : \"Report generated autonomously.\"));\n\nreturn [{\n  json: {\n    status: isApproved === true ? \"APPROVED\" : (isApproved === false ? \"REJECTED\" : \"COMPLETED\"),\n    decision,\n    notes,\n    summary,\n    final_report: report\n  }\n}];"
+      },
+      "id": "d9b5c5e8-5a91-4cf5-99ff-411db1e4bf6a",
+      "name": "Apply Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Run (Manual Trigger)": {
+      "main": [
+        [
+          {
+            "node": "Event Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Event Hunter": {
+      "main": [
+        [
+          {
+            "node": "Event Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Event Input": {
+      "main": [
+        [
+          {
+            "node": "Execute Event Scout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Event Scout": {
+      "main": [
+        [
+          {
+            "node": "Prepare Demand Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Demand Input": {
+      "main": [
+        [
+          {
+            "node": "Execute Demand Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Demand Analyst": {
+      "main": [
+        [
+          {
+            "node": "Prepare Deal Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Deal Input": {
+      "main": [
+        [
+          {
+            "node": "Execute Deal Hunter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Deal Hunter": {
+      "main": [
+        [
+          {
+            "node": "Collect Claims",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Claims": {
+      "main": [
+        [
+          {
+            "node": "Execute Verifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Verifier": {
+      "main": [
+        [
+          {
+            "node": "Prepare Money Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Money Input": {
+      "main": [
+        [
+          {
+            "node": "Execute Money Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Money Analyst": {
+      "main": [
+        [
+          {
+            "node": "Prepare Partner Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Partner Input": {
+      "main": [
+        [
+          {
+            "node": "Execute Partner Finder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Partner Finder": {
+      "main": [
+        [
+          {
+            "node": "Assemble Final Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Final Report": {
+      "main": [
+        [
+          {
+            "node": "Human Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Human Approval": {
+      "main": [
+        [
+          {
+            "node": "Apply Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

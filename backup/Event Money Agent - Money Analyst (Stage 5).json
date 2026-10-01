@@ -1,0 +1,129 @@
+{
+  "name": "Event Money Agent - Money Analyst (Stage 5)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            },
+            {
+              "name": "opportunities",
+              "type": "array"
+            },
+            {
+              "name": "verification",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "18d08a90-9f63-4495-a92d-a1f816391fbf",
+      "name": "When Called by Commander",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Event: {{ $(\"When Called by Commander\").first().json.event?.name || \"Event\" }} (Industry: {{ $(\"When Called by Commander\").first().json.event?.industry || \"Tech\" }})\nOpportunities to evaluate:\n{{ ($(\"When Called by Commander\").first().json.opportunities || []).map(o => \"- Company: \" + o.company + \" | Type: \" + (o.partnership_type || o.type || \"Sponsorship\") + \" | Angle: \" + (o.pitch_angle || \"\")).join(\"\\n\") }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are MONEY ANALYST in the Event Money Agent system. For each partnership opportunity you estimate the financial INPUTS only. You do NOT do the final arithmetic — a downstream calculator computes expected value, profit and ROI from your numbers.\n\nREQUIRED JSON SCHEMA:\n{\n  \"currency\": \"INR\",\n  \"estimates\": [\n    {\n      \"company\": \"...\",\n      \"partnership_type\": \"...\",\n      \"deal_value_low\": 50000,\n      \"deal_value_high\": 150000,\n      \"probability\": 0.6,\n      \"estimated_cost\": 20000,\n      \"basis\": \"FACT|ESTIMATE|ASSUMPTION\",\n      \"assumptions\": [\"...\"],\n      \"notes\": \"...\"\n    }\n  ]\n}\n\nReturn ONLY raw valid JSON matching this schema without markdown code blocks.",
+          "enableStreaming": false
+        }
+      },
+      "id": "82cb1a5b-db81-4c3b-88f3-27a7ae82da04",
+      "name": "Money Analyst",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        112
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "48b58411-e534-4ae2-9870-59269d72cf40",
+      "name": "Groq Llama 3.3 70B",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        224,
+        336
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.output || item.text || item;\nlet out = (typeof raw === \"object\") ? raw : {};\n\nif (typeof raw === \"string\") {\n  let cleaned = raw.trim().replace(/^\\`\\`\\`(?:json)?\\s*/i, \"\").replace(/\\s*\\`\\`\\`$/i, \"\").trim();\n  try {\n    out = JSON.parse(cleaned);\n  } catch (e) {\n    const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n    if (match) { try { out = JSON.parse(match[0]); } catch (e2) {} }\n  }\n}\nif (out && out.output) { out = out.output; }\n\nconst currency = out.currency || \"INR\";\nlet estimates = Array.isArray(out.estimates) ? out.estimates : [];\n\n// Resilient fallback if LLM omitted estimates\nif (estimates.length === 0) {\n  const opps = $(\"When Called by Commander\").first().json.opportunities || [];\n  estimates = opps.map(o => ({\n    company: o.company,\n    partnership_type: o.partnership_type || o.type || \"Sponsorship\",\n    deal_value_low: 100000,\n    deal_value_high: 250000,\n    probability: 0.7,\n    estimated_cost: 30000,\n    basis: \"ESTIMATE\",\n    assumptions: [\"Standard tier sponsorship package\"],\n    notes: o.pitch_angle || \"Strategic partnership\"\n  }));\n}\n\nconst round = (n) => Math.round((Number(n) || 0));\n\nconst financial_analysis = estimates.map((e) => {\n  const low = Number(e.deal_value_low) || 0;\n  const high = Number(e.deal_value_high) || 0;\n  const mid = (low + high) / 2;\n  const prob = Math.max(0, Math.min(1, Number(e.probability) || 0));\n  const cost = Number(e.estimated_cost) || 0;\n\n  const expected_value = round(mid * prob);\n  const estimated_profit = round(mid - cost);\n  const expected_profit = round((mid - cost) * prob);\n  const roi = cost > 0 ? Number((((mid - cost) / cost)).toFixed(2)) : null;\n  const spread = mid > 0 ? (high - low) / mid : 1;\n  const financial_confidence = Number((prob * (1 - Math.min(spread, 1) * 0.3)).toFixed(2));\n\n  return {\n    company: e.company,\n    partnership_type: e.partnership_type || \"\",\n    currency,\n    deal_value_range: { low: round(low), high: round(high), mid: round(mid) },\n    probability: prob,\n    expected_value,\n    estimated_cost: round(cost),\n    estimated_profit,\n    expected_profit,\n    roi,\n    financial_confidence,\n    basis: e.basis || \"ASSUMPTION\",\n    assumptions: Array.isArray(e.assumptions) ? e.assumptions : [],\n    notes: e.notes || \"\",\n  };\n});\n\nfinancial_analysis.sort((a, b) => b.expected_profit - a.expected_profit);\nconst totals = financial_analysis.reduce((acc, f) => {\n  acc.total_expected_value += f.expected_value;\n  acc.total_expected_profit += f.expected_profit;\n  return acc;\n}, { total_expected_value: 0, total_expected_profit: 0 });\n\nreturn [{\n  json: {\n    event: $(\"When Called by Commander\").first().json.event || {},\n    currency,\n    financial_analysis,\n    portfolio: {\n      opportunities_analyzed: financial_analysis.length,\n      total_expected_value: round(totals.total_expected_value),\n      total_expected_profit: round(totals.total_expected_profit),\n    },\n  },\n}];"
+      },
+      "id": "eb5a30c4-8244-4152-8b7f-6446aa87b968",
+      "name": "Compute Financials",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "When Called by Commander": {
+      "main": [
+        [
+          {
+            "node": "Money Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Llama 3.3 70B": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Money Analyst",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Money Analyst": {
+      "main": [
+        [
+          {
+            "node": "Compute Financials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

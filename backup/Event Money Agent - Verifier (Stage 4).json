@@ -1,0 +1,230 @@
+{
+  "name": "Event Money Agent - Verifier (Stage 4)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            },
+            {
+              "name": "claims",
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "id": "504fd8e1-69ce-4440-ba60-b463c1b199a7",
+      "name": "When Called by Commander",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -480,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const trig = $(\"When Called by Commander\").first().json;\nconst claims = Array.isArray(trig.claims) && trig.claims.length ? trig.claims : [{ claim: \"Event in \" + (trig.event?.location || \"Chennai\"), basis: \"location\" }];\nconst limited = claims.slice(0, 6);\nreturn limited.map((c, i) => ({\n  json: {\n    idx: i,\n    claim: c.claim || String(c),\n    basis: c.basis || \"\",\n    query: (c.claim || String(c)).slice(0, 100),\n  }\n}));"
+      },
+      "id": "c9fcea98-19a5-41e8-9543-2d1258cfc432",
+      "name": "Prepare Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://en.wikipedia.org/w/api.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "query"
+            },
+            {
+              "name": "list",
+              "value": "search"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "srlimit",
+              "value": "2"
+            },
+            {
+              "name": "srsearch",
+              "value": "={{ $json.query }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "e6955bf5-a3d9-4fe4-bc6e-ae78669167b6",
+      "name": "Wikipedia Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -32,
+        304
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const queries = $(\"Prepare Queries\").all();\nconst responses = $input.all();\nconst evidence = queries.map((q, i) => {\n  const resp = responses[i] ? responses[i].json : {};\n  const results = (resp && resp.query && Array.isArray(resp.query.search)) ? resp.query.search : [];\n  const top = results.slice(0, 2).map(r => ({\n    title: r.title,\n    snippet: (r.snippet || \"\").replace(/<[^>]+>/g, \"\"),\n  }));\n  return { claim: q.json.claim, basis: q.json.basis, wikipedia_results: top };\n});\nconst event = $(\"When Called by Commander\").first().json.event || {};\nreturn [{ json: { event, claims_with_evidence: evidence } }];"
+      },
+      "id": "afbd89a1-f7a4-45ff-854b-65237b4b7cc8",
+      "name": "Attach Evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Event context: {{ JSON.stringify($(\"Attach Evidence\").first().json.event) }}\nClaims with fetched Wikipedia evidence: {{ JSON.stringify($(\"Attach Evidence\").first().json.claims_with_evidence) }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are VERIFIER in the Event Money Agent system.\nFor each claim judge it against the supplied Wikipedia results and reasoning.\n\nREQUIRED JSON SCHEMA:\n{\n  \"verifications\": [\n    {\n      \"claim\": \"...\",\n      \"source\": \"...\",\n      \"source_type\": \"wikipedia|reasoning_only|none\",\n      \"supports_claim\": \"yes|partial|no|unknown\",\n      \"evidence_quality\": \"strong|moderate|weak|none\",\n      \"status\": \"VERIFIED|PROBABLE|ESTIMATED|UNVERIFIED\",\n      \"contradictions\": \"...\",\n      \"missing_evidence\": \"...\",\n      \"confidence\": 0.8\n    }\n  ],\n  \"summary\": {\n    \"total_claims\": 3,\n    \"verified\": 2,\n    \"unverified_or_worse\": 1,\n    \"overall_confidence\": 0.8\n  }\n}\n\nReturn ONLY raw valid JSON matching this schema without markdown code blocks.",
+          "enableStreaming": false
+        }
+      },
+      "id": "f24b7cb7-5466-479b-b86e-94a25d5fbbcd",
+      "name": "Verifier",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        400,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "630fa2b3-aed5-4b5b-85c6-0386ed326a2d",
+      "name": "Groq Llama 3.3 70B",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        400,
+        336
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.output || item.text || item;\nlet data = (typeof raw === \"object\" && raw !== null) ? raw : {};\nif (typeof raw === \"string\") {\n  try { data = JSON.parse(raw.trim().replace(/^\\`\\`\\`(?:json)?\\s*/i, \"\").replace(/\\s*\\`\\`\\`$/i, \"\").trim()); } catch (e) { data = { verifications: [], summary: { total_claims: 0, verified: 0, overall_confidence: 0.8 } }; }\n}\nconst content = (data && data.output) ? data.output : data;\nreturn [{ json: { output: content || {} } }];"
+      },
+      "id": "a386198e-8d66-4028-a712-228b7d4022ad",
+      "name": "Parse Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "When Called by Commander": {
+      "main": [
+        [
+          {
+            "node": "Prepare Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Queries": {
+      "main": [
+        [
+          {
+            "node": "Wikipedia Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wikipedia Search": {
+      "main": [
+        [
+          {
+            "node": "Attach Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Evidence": {
+      "main": [
+        [
+          {
+            "node": "Verifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Llama 3.3 70B": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Verifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifier": {
+      "main": [
+        [
+          {
+            "node": "Parse Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "name": "Event Money Agent - B2B Deal Hunter (Stage 3)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            },
+            {
+              "name": "audience",
+              "type": "object"
+            },
+            {
+              "name": "demand",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "fae955ab-b5fb-451e-aa89-c012ec0b3242",
+      "name": "When Called by Commander",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Event: {{ JSON.stringify($(\"When Called by Commander\").first().json.event) }}\nAudience: {{ JSON.stringify($(\"When Called by Commander\").first().json.audience) }}\nDemand analysis: {{ JSON.stringify($(\"When Called by Commander\").first().json.demand) }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are B2B DEAL HUNTER in the Event Money Agent system.\nYour mission is to identify exactly 4 HIGH-CONVERSION sponsor partner companies in the target region.\n\nRULES:\n- Output exactly 4 target companies (1 in Tier A, 2 in Tier B, 1 in Tier C).\n- Keep all descriptions, activation ideas, and pitch hooks concise (1 sentence each).\n- Prioritise companies with local decision-makers in the event region.\n\nREQUIRED JSON SCHEMA:\n{\n  \"opportunities\": [\n    {\n      \"company\": \"...\",\n      \"industry\": \"...\",\n      \"relevance\": \"...\",\n      \"audience_overlap\": \"...\",\n      \"partnership_opportunity\": \"...\",\n      \"partnership_type\": \"booth|sampling|category_sponsorship|title_sponsorship|discounts_coupons|advertising|affiliate|co_branding\",\n      \"activation_idea\": \"...\",\n      \"target_decision_maker\": \"...\",\n      \"contact_channel\": \"...\",\n      \"deal_speed\": \"Fast (1-2 weeks)|Medium (2-4 weeks)\",\n      \"pitch_hook\": \"...\",\n      \"estimated_value\": \"INR 50k - 1.5L\",\n      \"confidence\": 0.85,\n      \"priority\": \"high|medium|low\",\n      \"evidence\": [{ \"claim\": \"...\", \"basis\": \"...\", \"status\": \"VERIFIED|ESTIMATE|INFERENCE|ASSUMPTION\" }]\n    }\n  ],\n  \"deal_strategy_summary\": \"...\",\n  \"industries_considered\": [\"...\"],\n  \"notes\": \"...\"\n}\n\nReturn ONLY raw valid JSON matching this schema without markdown code blocks.",
+          "enableStreaming": false
+        }
+      },
+      "id": "60e1bc2a-6b9b-4473-ab6f-c92d93bb73ad",
+      "name": "B2B Deal Hunter",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "1b60dbb1-e477-4e3c-b9a2-d2995492a92f",
+      "name": "Groq Llama 3.3 70B",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        224,
+        336
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.output || item.text || item;\nlet data = null;\n\nif (typeof raw === 'object' && raw !== null) {\n  data = raw;\n} else if (typeof raw === 'string') {\n  let cleaned = raw.trim().replace(/^\\`\\`\\`(?:json)?\\s*/i, '').replace(/\\s*\\`\\`\\`$/i, '').trim();\n  try {\n    data = JSON.parse(cleaned);\n  } catch (e1) {\n    const lastObj = cleaned.lastIndexOf('}');\n    if (lastObj !== -1) {\n      const candidate = cleaned.slice(0, lastObj + 1) + '\\n]}';\n      try {\n        data = JSON.parse(candidate);\n      } catch (e2) {\n        data = { opportunities: [] };\n      }\n    } else {\n      data = { opportunities: [] };\n    }\n  }\n}\n\nconst content = (data && data.output) ? data.output : (data || {});\nif (!Array.isArray(content.opportunities)) {\n  content.opportunities = [];\n}\nreturn [{ json: { output: content } }];"
+      },
+      "id": "151a3f6c-d31a-4e53-8d14-cea08e90d3cb",
+      "name": "Parse Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "When Called by Commander": {
+      "main": [
+        [
+          {
+            "node": "B2B Deal Hunter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Llama 3.3 70B": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "B2B Deal Hunter",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B2B Deal Hunter": {
+      "main": [
+        [
+          {
+            "node": "Parse Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

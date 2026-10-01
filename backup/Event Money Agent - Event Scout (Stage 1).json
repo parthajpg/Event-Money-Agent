@@ -1,0 +1,117 @@
+{
+  "name": "Event Money Agent - Event Scout (Stage 1)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "raw_event"
+            }
+          ]
+        }
+      },
+      "id": "121d9de8-b99e-423f-835c-4534508657c5",
+      "name": "When Called by Commander",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $(\"When Called by Commander\").first().json.raw_event }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are EVENT SCOUT, a research and analysis agent in the Event Money Agent system.\nYour only job right now is to read the event brief in the user message and produce a STRUCTURED EVENT ANALYSIS.\n\nSTRICT RULES:\n- Never invent missing information. If something is not stated and cannot be safely inferred, list it under \"unknowns\".\n- Classify every data point in \"fields\" with an evidence status:\n  VERIFIED  = explicitly stated in the brief.\n  ESTIMATE  = a numeric/range approximation derived from stated facts.\n  INFERENCE = a reasonable conclusion from stated facts, not stated directly.\n  UNKNOWN   = requested but not derivable from the brief.\n- Do not use external tools or web data in this stage; work only from the brief.\n- Fill the \"event\" and \"audience\" objects with your best structured reading; use empty strings for values you cannot determine.\n- \"confidence\" is your overall 0.0-1.0 confidence in the whole analysis.\n\nREQUIRED JSON SCHEMA:\n{\n  \"event\": { \"name\": \"...\", \"type\": \"...\", \"location\": \"...\", \"date\": \"...\", \"organizer\": \"...\", \"theme\": \"...\" },\n  \"audience\": { \"expected_attendance\": \"...\", \"demographics\": \"...\", \"age_range\": \"...\", \"interests\": [\"...\"] },\n  \"fields\": [{ \"key\": \"...\", \"value\": \"...\", \"status\": \"VERIFIED|ESTIMATE|INFERENCE|UNKNOWN\", \"reasoning\": \"...\" }],\n  \"unknowns\": [\"...\"],\n  \"confidence\": 0.9\n}\n\nReturn ONLY the valid raw JSON object without markdown code blocks.",
+          "enableStreaming": false
+        }
+      },
+      "id": "93dbb70b-91d3-406d-81e8-7b271e3ffbf6",
+      "name": "Event Scout",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "f0f7f71c-ac23-488b-84e2-917e6925d5cc",
+      "name": "Groq Llama 3.3 70B",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        448,
+        336
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.output || item.text || item;\nlet data = null;\n\nif (typeof raw === \"object\" && raw !== null) {\n  data = raw;\n} else if (typeof raw === \"string\") {\n  let cleaned = raw.trim().replace(/^\\`\\`\\`(?:json)?\\s*/i, \"\").replace(/\\s*\\`\\`\\`$/i, \"\").trim();\n  try {\n    data = JSON.parse(cleaned);\n  } catch (e1) {\n    const match = cleaned.match(/\\{[\\s\\S]*/);\n    if (match) {\n      let candidate = match[0];\n      const qm = candidate.match(/(?<!\\\\)\"/g) || [];\n      if (qm.length % 2 !== 0) candidate += '\"';\n      let ob = (candidate.match(/\\{/g) || []).length;\n      let cb = (candidate.match(/\\}/g) || []).length;\n      let obk = (candidate.match(/\\[/g) || []).length;\n      let cbk = (candidate.match(/\\]/g) || []).length;\n      while (cbk < obk) { candidate += ']'; cbk++; }\n      while (cb < ob) { candidate += '}'; cb++; }\n      try {\n        data = JSON.parse(candidate);\n      } catch (e2) {\n        candidate = match[0].replace(/,\\s*\"[^\"]*\"\\s*:\\s*\"?[^\"}]*$/, \"\");\n        let ob2 = (candidate.match(/\\{/g) || []).length;\n        let cb2 = (candidate.match(/\\}/g) || []).length;\n        let obk2 = (candidate.match(/\\[/g) || []).length;\n        let cbk2 = (candidate.match(/\\]/g) || []).length;\n        while (cbk2 < obk2) { candidate += ']'; cbk2++; }\n        while (cb2 < ob2) { candidate += '}'; cb2++; }\n        try { data = JSON.parse(candidate); } catch (e3) { data = {}; }\n      }\n    } else {\n      data = {};\n    }\n  }\n}\n\nconst content = (data && data.output) ? data.output : (data || {});\nreturn [{ json: { output: content } }];"
+      },
+      "id": "92953d41-fdb9-4e5c-8f6b-d06992354639",
+      "name": "Parse Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "When Called by Commander": {
+      "main": [
+        [
+          {
+            "node": "Event Scout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Llama 3.3 70B": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Event Scout",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Event Scout": {
+      "main": [
+        [
+          {
+            "node": "Parse Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

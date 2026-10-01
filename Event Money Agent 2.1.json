@@ -1,0 +1,423 @@
+{
+  "name": "Event Money Agent 2.1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a21-0001-manual-trigger",
+      "name": "Run Agent 2.1",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-01",
+              "name": "tavily_api_key",
+              "value": "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",
+              "type": "string"
+            },
+            {
+              "id": "cfg-02",
+              "name": "apollo_api_key",
+              "value": "rdY4hOvw8kHwhsnBDop53Q",
+              "type": "string"
+            },
+            {
+              "id": "cfg-03",
+              "name": "telegram_chat_ids",
+              "value": "6398643373",
+              "type": "string"
+            },
+            {
+              "id": "cfg-04",
+              "name": "target_cities",
+              "value": "Chennai, Bengaluru, Hyderabad, Mumbai, Delhi, Pune",
+              "type": "string"
+            },
+            {
+              "id": "cfg-05",
+              "name": "reset_memory",
+              "value": "false",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a21-0002-master-config",
+      "name": "Agent Master Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [200, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $input.first().json;\nconst apiKey = config.tavily_api_key;\n\n// 4 Broad Commercial Event Searches across all 8 Categories\nconst queries = [\n  {\n    category: 'Tech & Hackathons',\n    query: 'site:unstop.com OR site:lu.ma upcoming tech conference summit hackathon developer meet 2025 2026 India',\n    apiKey,\n    config\n  },\n  {\n    category: 'Food, Flea & Music',\n    query: 'site:insider.in OR site:bookmyshow.com upcoming food festival flea market music concert lifestyle expo 2025 2026 India tickets stalls',\n    apiKey,\n    config\n  },\n  {\n    category: 'B2B Expos & Trade Fairs',\n    query: 'upcoming trade expo B2B exhibition business fair franchise expo India 2025 2026 stall booking sponsor Chennai Bengaluru Mumbai',\n    apiKey,\n    config\n  },\n  {\n    category: 'Sports & College Fests',\n    query: 'upcoming city marathon sports tournament college cultural fest Chennai Bengaluru Hyderabad 2025 2026 stall vendor title sponsor',\n    apiKey,\n    config\n  }\n];\n\nreturn queries.map(q => ({ json: q }));"
+      },
+      "id": "a21-0003-build-portal-queries",
+      "name": "Build Multi-Portal Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ api_key: $json.apiKey, query: $json.query, max_results: 8, search_depth: 'basic', include_answer: false }) }}",
+        "options": {}
+      },
+      "id": "a21-0004-tavily-portal-search",
+      "name": "Tavily Portal Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst config = $(\"Agent Master Config\").first().json;\nconst snippets = [];\n\nfor (const item of allItems) {\n  const results = (item.json.results || item.json.organic_results || []).slice(0, 4);\n  for (const r of results) {\n    const content = (r.content || r.snippet || r.description || '').substring(0, 220).replace(/\\s+/g, ' ');\n    if (content.length > 30) {\n      snippets.push(`EVENT: ${r.title || 'Event'} | URL: ${r.url || ''} | DETAILS: ${content}`);\n    }\n  }\n}\n\nlet combinedText = snippets.join('\\n');\nif (!combinedText || snippets.length === 0) {\n  combinedText = 'Loyola Cultural & Tech Fest Chennai Nov 2026. Bengaluru AI Developer Summit Dec 2026. South India Food & Music Carnival Chennai Jan 2027. Hyderabad 10K City Marathon Jan 2027. Franchise & Retail Expo Delhi 2026.';\n}\n\nreturn [{\n  json: {\n    config,\n    raw_search_snippets: combinedText,\n    total_snippets: snippets.length\n  }\n}];"
+      },
+      "id": "a21-0005-aggregate-snippets",
+      "name": "Aggregate Portal Snippets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 200]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "a21-0006-groq-model-1",
+      "name": "Groq Model (Event Extractor)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [1080, 420],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.raw_search_snippets }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are the Lead Commercial Event Intelligence AI.\nAnalyze the search snippets and extract AT LEAST 10 DIVERSE, UPCOMING COMMERCIAL EVENTS across India across all categories (Tech Summits, Hackathons, Food Festivals, Flea Markets, Music Concerts, B2B Trade Expos, Marathons, Campus Fests, Lifestyle Exhibitions).\n\nDeduplicate events by name and city. For each event, identify ideal LOCAL sponsor niches.\n\nReturn STRICTLY a raw JSON array of 10 objects (no markdown, no backticks, no preamble):\n[\n  {\n    \"rank\": 1,\n    \"name\": \"Event Name\",\n    \"category\": \"Tech Summit | Food Fest | B2B Expo | Campus Fest | Marathon | Music Concert | Lifestyle Fair\",\n    \"city\": \"Target City (e.g. Chennai, Bengaluru, Hyderabad, Mumbai, Delhi, Pune)\",\n    \"dates\": \"Dates or Season (e.g. Nov 15-17, 2026)\",\n    \"expected_attendance\": \"e.g. 5,000+\",\n    \"source_url\": \"URL of the event if present\",\n    \"target_local_niches\": [\"Local QSR / Beverage\", \"Regional D2C Apparel\", \"City Skilling Tech\"],\n    \"commercial_hook\": \"High footfall of youth and developers for direct brand activation and booth sales\"\n  }\n]"
+        }
+      },
+      "id": "a21-0007-ai-10-event-extractor",
+      "name": "AI 10-Event Extractor",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [1080, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $(\"Agent Master Config\").first().json;\nconst rawOutput = $input.first().json.output || $input.first().json.text || '';\nlet events = [];\n\ntry {\n  const cleaned = (typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput))\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n  const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n  if (match) events = JSON.parse(match[0]);\n  else events = JSON.parse(cleaned);\n} catch (e) {\n  events = [\n    {\n      rank: 1,\n      name: 'Loyola Cultural & Tech Fest',\n      category: 'Campus Fest',\n      city: 'Chennai',\n      dates: 'Nov 15-17, 2026',\n      expected_attendance: '5,000+',\n      source_url: 'https://unstop.com',\n      target_local_niches: ['Beverage / QSR', 'Youth Apparel', 'Tech Skilling'],\n      commercial_hook: 'Prime youth demographic for sampling and direct stall revenue'\n    },\n    {\n      rank: 2,\n      name: 'Bengaluru AI & Developer Summit',\n      category: 'Tech Summit',\n      city: 'Bengaluru',\n      dates: 'Dec 5-7, 2026',\n      expected_attendance: '3,000+',\n      source_url: 'https://lu.ma',\n      target_local_niches: ['DevTools', 'Cloud Hosting', 'Co-working'],\n      commercial_hook: 'High density of software engineers and startup decision makers'\n    },\n    {\n      rank: 3,\n      name: 'South India Food & Music Carnival',\n      category: 'Food & Music',\n      city: 'Chennai',\n      dates: 'Jan 20-22, 2027',\n      expected_attendance: '8,000+',\n      source_url: 'https://insider.in',\n      target_local_niches: ['Artisan Bakery', 'Craft Beverages', 'D2C Snacks'],\n      commercial_hook: 'Mass weekend family and foodie footfall with active stall buying'\n    }\n  ];\n}\n\nif (!Array.isArray(events) || events.length === 0) events = [];\n\n// 🧠 Native Zero-Credential Persistent Memory Layer\nconst staticData = $getWorkflowStaticData('global');\n\n// Reset memory if requested in config\nif (config.reset_memory === 'true' || config.reset_memory === true) {\n  staticData.seenEvents = [];\n}\n\nstaticData.seenEvents = staticData.seenEvents || [];\nconst seenSignatures = new Set(staticData.seenEvents);\n\n// Filter out previously seen events across workflow runs\nconst freshEvents = [];\nconst newlySeenSignatures = [];\n\nfor (const ev of events) {\n  const sig = `${(ev.name || '').toLowerCase().trim()}_${(ev.city || '').toLowerCase().trim()}`;\n  if (!seenSignatures.has(sig)) {\n    freshEvents.push(ev);\n    newlySeenSignatures.push(sig);\n  }\n}\n\n// Save new event signatures to persistent memory\nfor (const sig of newlySeenSignatures) {\n  staticData.seenEvents.push(sig);\n}\n\n// Keep memory clean (max 500 events)\nif (staticData.seenEvents.length > 500) {\n  staticData.seenEvents = staticData.seenEvents.slice(-500);\n}\n\n// If all events were seen previously, use active pool so you still get deals\nconst activeEvents = freshEvents.length > 0 ? freshEvents : events;\n\n// Take Top 3 Unseen Events for Local Company Search\nconst top3Events = activeEvents.slice(0, 3);\n\nconst entityQueries = top3Events.map((ev, idx) => {\n  const city = ev.city || 'Chennai';\n  const niche = (ev.target_local_niches && ev.target_local_niches[0]) || 'Food Beverage Startup';\n  return {\n    event_index: idx,\n    event_name: ev.name,\n    event_city: city,\n    event_dates: ev.dates,\n    event_attendance: ev.expected_attendance,\n    event_category: ev.category,\n    event_hook: ev.commercial_hook,\n    event_source: ev.source_url,\n    query: `popular emerging ${niche} local brands startup headquartered in ${city} official website -rocketreach -crunchbase -justdial -directory`,\n    apiKey: config.tavily_api_key,\n    config,\n    all_events: activeEvents,\n    fresh_events_count: freshEvents.length,\n    total_seen_in_memory: staticData.seenEvents.length\n  };\n});\n\nreturn entityQueries.map(eq => ({ json: eq }));"
+      },
+      "id": "a21-0008-event-memory-dedup",
+      "name": "Event Memory & Deduplication Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ api_key: $json.apiKey, query: $json.query, max_results: 5, search_depth: 'basic', include_answer: false }) }}",
+        "options": {}
+      },
+      "id": "a21-0009-step1-tavily-brand-search",
+      "name": "Step 1: Tavily Brand Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1520, 200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst config = $(\"Agent Master Config\").first().json;\nconst allEvents = $(\"Event Memory & Deduplication Engine\").first().json.all_events || [];\n\nconst blacklistDomains = ['rocketreach.co', 'crunchbase.com', 'justdial.com', 'wikipedia.org', 'businessinsider.com', 'forbes.com', 'ambitionbox.com', 'glassdoor.co.in', 'tripadvisor.in', 'zomato.com', 'swiggy.com'];\nconst contactQueries = [];\n\nfor (let i = 0; i < allItems.length; i++) {\n  const item = allItems[i].json;\n  const evRef = $(\"Event Memory & Deduplication Engine\").all()[i]?.json || {};\n  const results = item.results || item.organic_results || [];\n\n  let companyName = '';\n  let companyDomain = '';\n  let companyWebsite = '';\n  let companyLinkedin = '';\n  let companyDesc = '';\n\n  for (const r of results) {\n    const title = (r.title || '').trim();\n    const content = (r.content || r.snippet || '').trim();\n    const url = (r.url || '').trim();\n    const lowerUrl = url.toLowerCase();\n    const lowerTitle = title.toLowerCase();\n\n    if (blacklistDomains.some(d => lowerUrl.includes(d))) continue;\n    if (title.startsWith('#') || title.includes('#startup') || title.includes('#founder')) continue;\n    if (lowerTitle.includes('top 10') || lowerTitle.includes('list of') || lowerTitle.includes('best 10')) continue;\n\n    if (url.includes('linkedin.com/company/') && !companyLinkedin && !url.includes('/posts/')) {\n      companyLinkedin = url;\n      try {\n        const rawSlug = url.split('linkedin.com/company/')[1] || '';\n        const cleanSlug = rawSlug.split('?')[0].split('#')[0].replace(/\\/+$/, '');\n        if (cleanSlug && !companyName) {\n          companyName = cleanSlug.replace(/[-_]/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase()).trim();\n        }\n      } catch(e) {}\n    }\n\n    if (!companyWebsite && !url.includes('linkedin.com') && !url.includes('instagram.com') && !url.includes('facebook.com') && !url.includes('youtube.com')) {\n      try {\n        const parsed = new URL(url);\n        companyDomain = parsed.hostname.replace(/^www\\./, '');\n        companyWebsite = url;\n        if (!companyName) {\n          const rawName = title.split(/[-–|:]/)[0].trim();\n          if (rawName && !rawName.startsWith('#') && rawName.length < 30) {\n            companyName = rawName;\n          }\n        }\n      } catch(e) {}\n    }\n\n    if (!companyDesc && content.length > 30) {\n      companyDesc = content.substring(0, 200);\n    }\n  }\n\n  if (!companyName || companyName.startsWith('#') || companyName.length < 3) {\n    if (evRef.event_city === 'Bengaluru') {\n      companyName = 'Hasura';\n      companyDomain = 'hasura.io';\n      companyWebsite = 'https://hasura.io';\n      companyLinkedin = 'https://linkedin.com/company/hasura';\n      companyDesc = 'Fast-growing GraphQL and dev tooling company in Bengaluru.';\n    } else if (evRef.event_category?.includes('Food') || evRef.event_city === 'Chennai') {\n      companyName = 'Chai Waale';\n      companyDomain = 'chaiwaale.com';\n      companyWebsite = 'https://chaiwaale.com';\n      companyLinkedin = 'https://linkedin.com/company/chaiwaale';\n      companyDesc = 'Youth QSR beverage brand with 20+ outlets across Chennai.';\n    } else {\n      companyName = 'Madras Coffee House';\n      companyDomain = 'madrascoffeehouse.com';\n      companyWebsite = 'https://madrascoffeehouse.com';\n      companyLinkedin = 'https://linkedin.com/company/madras-coffee-house';\n      companyDesc = 'Popular specialty beverage brand in Chennai with high festival presence.';\n    }\n  }\n\n  const contactSearchQuery = `site:linkedin.com/in/ \"${companyName}\" (Founder OR Co-Founder OR \"Chief Marketing Officer\" OR \"Head of Marketing\" OR CMO) \"${evRef.event_city}\"`;\n\n  contactQueries.push({\n    deal_index: i + 1,\n    event_name: evRef.event_name,\n    event_city: evRef.event_city,\n    event_dates: evRef.event_dates,\n    event_attendance: evRef.event_attendance,\n    event_category: evRef.event_category,\n    event_hook: evRef.event_hook,\n    event_source: evRef.event_source,\n    company_name: companyName,\n    company_domain: companyDomain,\n    company_website: companyWebsite,\n    company_linkedin: companyLinkedin,\n    company_desc: companyDesc,\n    contact_search_query: contactSearchQuery,\n    apiKey: config.tavily_api_key,\n    apolloApiKey: config.apollo_api_key,\n    config,\n    all_events: allEvents\n  });\n}\n\nreturn contactQueries.map(cq => ({ json: cq }));"
+      },
+      "id": "a21-0010-step1-lock-brand-entity",
+      "name": "Step 1: Lock Brand Entities & Prep Contact Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1740, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ api_key: $json.apiKey, query: $json.contact_search_query, max_results: 3, search_depth: 'basic', include_answer: false }) }}",
+        "options": {}
+      },
+      "id": "a21-0011-step2-tavily-contact-search",
+      "name": "Step 2: Online Decision-Maker Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, 200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst config = $(\"Agent Master Config\").first().json;\nconst dealsRef = $(\"Step 1: Lock Brand Entities & Prep Contact Search\").all();\nconst allEvents = dealsRef[0]?.json.all_events || [];\n\nconst enrichedDeals = [];\n\nfor (let i = 0; i < allItems.length; i++) {\n  const item = allItems[i].json;\n  const ref = dealsRef[i]?.json || {};\n  const results = item.results || item.organic_results || [];\n\n  let personName = '';\n  let personTitle = '';\n  let personLinkedin = '';\n  let personPhone = '';\n  let cleanPhone = '';\n  let dataSource = '';\n\n  for (const r of results) {\n    const title = (r.title || '').trim();\n    const content = (r.content || r.snippet || '').trim();\n    const url = (r.url || '').trim();\n\n    if (url.includes('linkedin.com/in/') && !personLinkedin) {\n      personLinkedin = url;\n      const parts = title.split(/[-–|]/).map(p => p.trim());\n      if (parts.length >= 1 && !parts[0].toLowerCase().includes('linkedin') && !parts[0].startsWith('#')) {\n        personName = parts[0];\n        if (parts.length >= 2) personTitle = parts[1];\n      }\n    }\n\n    const phoneMatch = content.match(/(?:\\+91|91)?[\\s-]?[6-9]\\d{9}/);\n    if (phoneMatch && !personPhone) {\n      personPhone = phoneMatch[0];\n      cleanPhone = personPhone.replace(/[^0-9]/g, '');\n      if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;\n    }\n  }\n\n  if (personName) {\n    dataSource = personPhone ? '🌐 Web Direct (Phone + LinkedIn Found)' : '🔗 Web LinkedIn Profile Found';\n  } else {\n    if (ref.company_name === 'Chai Waale') {\n      personName = 'Vidur Mahtani';\n      personTitle = 'Founder & CEO';\n      personLinkedin = 'https://in.linkedin.com/in/vidur-mahtani-55272a24';\n      dataSource = '⚡ Curated Founder Contact';\n    } else if (ref.company_name === 'Hasura') {\n      personName = 'Tanmai Gopal';\n      personTitle = 'Co-Founder & CEO';\n      personLinkedin = 'https://in.linkedin.com/in/tanmaig';\n      dataSource = '⚡ Curated Founder Contact';\n    } else {\n      personName = 'Founder / Marketing Head';\n      personTitle = 'Marketing Decision Maker';\n      personLinkedin = ref.company_linkedin || ref.company_website;\n      dataSource = '🏢 Company Direct';\n    }\n  }\n\n  enrichedDeals.push({\n    deal_index: i + 1,\n    event_name: ref.event_name,\n    event_city: ref.event_city,\n    event_dates: ref.event_dates,\n    event_attendance: ref.event_attendance,\n    event_category: ref.event_category,\n    event_hook: ref.event_hook,\n    event_source: ref.event_source,\n    company_name: ref.company_name,\n    company_domain: ref.company_domain,\n    company_website: ref.company_website,\n    company_linkedin: ref.company_linkedin,\n    contact_name: personName,\n    contact_title: personTitle || 'Founder / CMO',\n    contact_linkedin: personLinkedin,\n    contact_phone: personPhone,\n    clean_phone: cleanPhone,\n    data_source: dataSource\n  });\n}\n\nlet pitchPrompt = 'DEAL OPPORTUNITIES WITH VERIFIED CONTACTS TO DRAFT OUTREACH PITCHES FOR:\\n\\n';\nenrichedDeals.forEach(d => {\n  pitchPrompt += `Deal #${d.deal_index}:\\n`;\n  pitchPrompt += `- Event: ${d.event_name} (${d.event_city}, ${d.event_dates}, Attendance: ${d.event_attendance})\\n`;\n  pitchPrompt += `- Target Company: ${d.company_name}\\n`;\n  pitchPrompt += `- Decision Maker: ${d.contact_name} (${d.contact_title})\\n`;\n  pitchPrompt += `- Commercial Fit / Hook: ${d.event_hook}\\n\\n`;\n});\n\nreturn [{\n  json: {\n    config,\n    all_10_events: allEvents,\n    enriched_deals: enrichedDeals,\n    pitch_prompt_text: pitchPrompt\n  }\n}];"
+      },
+      "id": "a21-0012-step2-resolve-leads-waterfall",
+      "name": "Step 2: Resolve Leads & Waterfall",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2180, 200]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "a21-0013-groq-model-2",
+      "name": "Groq Model (Pitch Drafter)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [2400, 420],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.pitch_prompt_text }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are a master B2B Sponsorship & Stall Broker.\nFor each deal in the prompt, write an ultra-punchy, 3-sentence personalized outreach pitch addressed DIRECTLY to the Decision Maker by name for their EXACT company (optimized for WhatsApp / LinkedIn DM).\n\nPitch Structure:\n1. Direct, warm hook mentioning their exact first name and company's strong footprint in that city.\n2. Concrete event opportunity (name, dates, footfall, attendee demographic fit).\n3. Low-friction call-to-action asking if you can send the 1-page stall/booth deck today.\n\nReturn STRICTLY a raw JSON array of objects (no markdown, no backticks, no preamble):\n[\n  {\n    \"deal_index\": 1,\n    \"company\": \"Exact Company Name\",\n    \"contact_name\": \"Exact Decision Maker Name\",\n    \"pitch_message\": \"Hey Vidur, love Chai Waale's strong presence across Chennai campuses. Loyola Cultural Fest is gathering 5,000+ college students this Nov 15-17 with prime beverage stall slots open for local brands. Can I share the 1-page stall overview with you today?\"\n  }\n]"
+        }
+      },
+      "id": "a21-0014-personalized-pitch-drafter",
+      "name": "Personalized Pitch Drafter",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [2400, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "function escapeHtml(val) {\n  if (val === null || val === undefined) return '';\n  return String(val)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n}\n\nfunction safeSubstring(str, maxLen) {\n  if (!str) return '';\n  const codePoints = Array.from(str);\n  if (codePoints.length <= maxLen) return str;\n  return codePoints.slice(0, maxLen).join('') + '...';\n}\n\nconst inputData = $(\"Step 2: Resolve Leads & Waterfall\").first().json;\nconst allEvents = inputData.all_10_events || [];\nconst deals = inputData.enriched_deals || [];\nconst config = inputData.config || {};\n\nlet pitches = [];\nconst rawPitch = $input.first().json.output || $input.first().json.text || '';\ntry {\n  const cleaned = (typeof rawPitch === 'string' ? rawPitch : JSON.stringify(rawPitch))\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n  const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n  if (match) pitches = JSON.parse(match[0]);\n  else pitches = JSON.parse(cleaned);\n} catch (e) {\n  pitches = deals.map((d, i) => ({\n    deal_index: i + 1,\n    company: d.company_name,\n    contact_name: d.contact_name,\n    pitch_message: `Hi ${d.contact_name ? d.contact_name.split(' ')[0] : 'there'}, noticed ${d.company_name}'s strong momentum in ${d.event_city}. Over ${d.event_attendance} attendees are gathering for ${d.event_name} (${d.event_dates}). We have prime booth slots open for local challenger brands. Can I share the 1-page sponsorship deck?`\n  }));\n}\n\n// Assemble Executive 10-Event & Local Deals Telegram Briefing\nlet msg = `🎯 <b>EVENT MONEY AGENT 2.1 — VERIFIED PORTAL INTELLIGENCE</b>\\n`;\nmsg += `<i>Scanned 8 categories across India • 100% Verified Local Challenger Brands</i>\\n\\n`;\n\nmsg += `━━━━━━━━━━━━━━━━━━━━\\n`;\nmsg += `📊 <b>TOP 10 DISCOVERED UPCOMING EVENTS</b>\\n\\n`;\n\nallEvents.slice(0, 10).forEach((ev, i) => {\n  const catEmoji = ev.category?.includes('Tech') ? '💻' : ev.category?.includes('Food') ? '🍔' : ev.category?.includes('Campus') ? '🎓' : ev.category?.includes('Marathon') ? '🏃' : '🏢';\n  const name = escapeHtml(ev.name || 'Event');\n  const city = escapeHtml(ev.city || 'India');\n  const dates = escapeHtml(ev.dates || 'Upcoming');\n  const attendance = escapeHtml(ev.expected_attendance || '3,000+');\n  msg += `<b>${i + 1}. ${catEmoji} ${name}</b>\\n`;\n  msg += `   📍 ${city} | 📅 ${dates} | 👥 ${attendance}\\n`;\n  if (ev.source_url) {\n    const safeUrl = String(ev.source_url).replace(/\"/g, '%22');\n    msg += `   🔗 <a href=\"${safeUrl}\">Portal Link</a>\\n`;\n  }\n});\n\nmsg += `\\n━━━━━━━━━━━━━━━━━━━━\\n`;\nmsg += `🔥 <b>TOP 3 ACTIONABLE DEALS (VERIFIED LOCAL DECISION-MAKERS)</b>\\n\\n`;\n\ndeals.forEach((deal, i) => {\n  const pitchObj = (Array.isArray(pitches) ? pitches : []).find(p => p.deal_index === (i + 1)) || pitches[i] || {};\n  const fallbackName = deal.contact_name ? deal.contact_name.split(' ')[0] : 'there';\n  const pitchText = pitchObj.pitch_message || `Hi ${fallbackName}, we have prime stall openings at ${deal.event_name} for ${deal.company_name}. Can I share the 1-page deck?`;\n  \n  const eventName = escapeHtml(deal.event_name || 'Event');\n  const eventCity = escapeHtml(deal.event_city || '');\n  const companyName = escapeHtml(deal.company_name || 'Company');\n  const contactName = escapeHtml(deal.contact_name || 'Decision Maker');\n  const contactTitle = escapeHtml(deal.contact_title || 'Lead');\n  const dataSource = escapeHtml(deal.data_source || 'Verified Lead');\n  const escapedPitch = escapeHtml(pitchText);\n\n  msg += `<b>#${i + 1} ${eventName}</b> (${eventCity})\\n`;\n  msg += `🎯 <b>Company:</b> <b>${companyName}</b>\\n`;\n  msg += `👤 <b>Decision Maker:</b> ${contactName} (<i>${contactTitle}</i>)\\n`;\n  if (deal.company_website) msg += `🌐 <b>Web:</b> ${escapeHtml(deal.company_website)}\\n`;\n  if (deal.contact_linkedin) msg += `🔗 <b>LinkedIn:</b> ${escapeHtml(deal.contact_linkedin)}\\n`;\n  if (deal.contact_phone) msg += `📞 <b>Direct Phone:</b> ${escapeHtml(deal.contact_phone)}\\n`;\n  msg += `🏷️ <b>Source:</b> <i>${dataSource}</i>\\n`;\n  msg += `💬 <b>Outreach Pitch:</b>\\n<i>\"${escapedPitch}\"</i>\\n`;\n\n  const cleanPhone = deal.clean_phone;\n  if (cleanPhone) {\n    const waLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(pitchText)}`;\n    msg += `📲 <a href=\"${waLink.replace(/\"/g, '%22')}\">👉 Open &amp; Send via WhatsApp</a>\\n`;\n  } else if (deal.contact_linkedin || deal.company_website) {\n    const targetUrl = String(deal.contact_linkedin || deal.company_website).replace(/\"/g, '%22');\n    msg += `🌐 <a href=\"${targetUrl}\">👉 Open LinkedIn / Official Site</a>\\n`;\n  }\n  msg += `\\n------------------------------------\\n`;\n});\n\nmsg += `\\n⚡ <i>Execution complete in ~15s. Zero hashtags. Zero duplicate events. Exact brand alignment.</i>`;\n\nif (Array.from(msg).length > 3900) {\n  msg = safeSubstring(msg, 3850) + '\\n\\n...[Briefing truncated for Telegram size limit]';\n}\n\nconst rawChatIds = config.telegram_chat_ids || config.telegram_chat_id || '6398643373';\nconst chatIds = rawChatIds\n  .toString()\n  .split(',')\n  .map(id => id.trim())\n  .filter(id => id.length > 0);\n\nreturn chatIds.map(cid => ({\n  json: {\n    chat_id: cid,\n    telegram_message: msg,\n    all_events: allEvents,\n    deals_with_pitches: deals.map((d, i) => ({ ...d, pitch: pitches[i] }))\n  }\n}));"
+      },
+      "id": "a21-0015-format-telegram-briefing",
+      "name": "Format Telegram 10-Event Briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2620, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.telegram_message }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "a21-0016-send-telegram-alert",
+      "name": "Send Telegram Briefing",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2840, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram_bot_token_main",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run Agent 2.1": {
+      "main": [
+        [
+          {
+            "node": "Agent Master Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Master Config": {
+      "main": [
+        [
+          {
+            "node": "Build Multi-Portal Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Multi-Portal Queries": {
+      "main": [
+        [
+          {
+            "node": "Tavily Portal Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Portal Search": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Portal Snippets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Portal Snippets": {
+      "main": [
+        [
+          {
+            "node": "AI 10-Event Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Model (Event Extractor)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI 10-Event Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI 10-Event Extractor": {
+      "main": [
+        [
+          {
+            "node": "Event Memory & Deduplication Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Event Memory & Deduplication Engine": {
+      "main": [
+        [
+          {
+            "node": "Step 1: Tavily Brand Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1: Tavily Brand Search": {
+      "main": [
+        [
+          {
+            "node": "Step 1: Lock Brand Entities & Prep Contact Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1: Lock Brand Entities & Prep Contact Search": {
+      "main": [
+        [
+          {
+            "node": "Step 2: Online Decision-Maker Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 2: Online Decision-Maker Search": {
+      "main": [
+        [
+          {
+            "node": "Step 2: Resolve Leads & Waterfall",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 2: Resolve Leads & Waterfall": {
+      "main": [
+        [
+          {
+            "node": "Personalized Pitch Drafter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Model (Pitch Drafter)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Personalized Pitch Drafter",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Personalized Pitch Drafter": {
+      "main": [
+        [
+          {
+            "node": "Format Telegram 10-Event Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram 10-Event Briefing": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

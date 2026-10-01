@@ -1,0 +1,282 @@
+{
+  "name": "Event Money Agent - Event Hunter (Stage 0)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "s0-0002-manual-trigger-testing",
+      "name": "Run Now (Testing)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 112]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-01",
+              "name": "tavily_api_key",
+              "value": "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",
+              "type": "string"
+            },
+            {
+              "id": "cfg-02",
+              "name": "cities",
+              "value": "Chennai, Bengaluru, Hyderabad, Mumbai, Delhi, Pune",
+              "type": "string"
+            },
+            {
+              "id": "cfg-03",
+              "name": "telegram_chat_id",
+              "value": "6398643373",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "s0-0004-search-config-set",
+      "name": "Search Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [224, 112]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $input.first().json;\nconst cities = config.cities.split(',').map(c => c.trim());\nconst apiKey = config.tavily_api_key;\nconst queries = [];\n\n// --- ALL CITY EVENT TYPES across ALL cities ---\n\n// 1. College & campus fests\nfor (const city of cities) {\n  queries.push({ query: `upcoming college cultural fest fest ${city} 2025 2026 sponsorship stall open`, city, category: 'Cultural Fest', apiKey });\n}\n\n// 2. Hackathons & tech conferences\nfor (const city of cities) {\n  queries.push({ query: `upcoming hackathon tech summit developer conference ${city} 2025 2026 register`, city, category: 'Hackathon', apiKey });\n}\n\n// 3. Music concerts & entertainment\nfor (const city of cities) {\n  queries.push({ query: `upcoming music concert live show entertainment event ${city} 2025 2026 stall vendor`, city, category: 'Concert', apiKey });\n}\n\n// 4. Food festivals & culinary events\nfor (const city of cities) {\n  queries.push({ query: `upcoming food festival street food expo culinary event ${city} 2025 2026 stall booking`, city, category: 'Food Fest', apiKey });\n}\n\n// 5. Trade expos & B2B exhibitions\nfor (const city of cities) {\n  queries.push({ query: `upcoming trade expo B2B exhibition business fair SME ${city} 2025 2026 stall sponsor`, city, category: 'B2B Expo', apiKey });\n}\n\n// 6. Marathons, sports & fitness events\nfor (const city of cities) {\n  queries.push({ query: `upcoming marathon run sports fitness event ${city} 2025 2026 sponsor vendor`, city, category: 'Sports', apiKey });\n}\n\n// 7. Startup & entrepreneurship summits\nfor (const city of cities) {\n  queries.push({ query: `upcoming startup summit entrepreneur investor meetup ${city} 2025 2026 sponsor`, city, category: 'Startup Summit', apiKey });\n}\n\n// 8. Cultural & religious festivals\nfor (const city of cities) {\n  queries.push({ query: `upcoming cultural festival religious fair mela celebration ${city} 2025 2026 stall`, city, category: 'Cultural Festival', apiKey });\n}\n\n// 9. Corporate & professional conferences\nfor (const city of cities) {\n  queries.push({ query: `upcoming corporate conference professional summit industry event ${city} 2025 2026 sponsor`, city, category: 'Corporate Conference', apiKey });\n}\n\n// 10. Wedding & lifestyle expos\nfor (const city of cities) {\n  queries.push({ query: `upcoming wedding expo bridal show lifestyle fair ${city} 2025 2026 vendor stall`, city, category: 'Wedding Expo', apiKey });\n}\n\n// 11. Platform-specific searches\nqueries.push({ query: 'site:unstop.com upcoming events cultural fest hackathon open registration India 2025 2026', city: 'multi', category: 'Platform-Unstop', apiKey });\nqueries.push({ query: 'site:lu.ma upcoming events India conference meetup 2025 2026', city: 'multi', category: 'Platform-Luma', apiKey });\nqueries.push({ query: 'site:insider.in upcoming events concerts festivals India 2025 2026', city: 'multi', category: 'Platform-Insider', apiKey });\nqueries.push({ query: 'site:eventbrite.com upcoming events India 2025 2026 stall sponsor', city: 'multi', category: 'Platform-Eventbrite', apiKey });\n\nreturn queries.map(q => ({ json: q }));"
+      },
+      "id": "s0-0005-build-queries-code",
+      "name": "Build Search Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [448, 112]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ api_key: $json.apiKey, query: $json.query, max_results: 5, search_depth: 'basic', include_answer: false }) }}",
+        "options": {}
+      },
+      "id": "s0-0006-tavily-web-search",
+      "name": "Tavily Web Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [672, 112],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst snippets = [];\nfor (const item of allItems) {\n  const results = item.json.results || item.json.organic_results || [];\n  for (const r of results) {\n    const content = (r.content || r.snippet || r.description || '').substring(0, 600);\n    if (content.length > 80) snippets.push(`TITLE: ${r.title || 'Unknown'}\\nURL: ${r.url || ''}\\nSNIPPET: ${content}`);\n  }\n}\nif (snippets.length === 0) return [{ json: { llm_prompt: 'NO_RESULTS', snippets_count: 0 } }];\nreturn [{ json: { llm_prompt: snippets.join('\\n\\n---\\n\\n'), snippets_count: snippets.length } }];"
+      },
+      "id": "s0-0007-prepare-llm-input",
+      "name": "Prepare LLM Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [896, 112]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": { "temperature": 0.2 }
+      },
+      "id": "s0-0008-groq-llm",
+      "name": "Groq LLM",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [1120, 336],
+      "credentials": {
+        "groqApi": {
+          "id": "wnyadzTYaSb9M0x1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.llm_prompt }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are EVENT HUNTER — an AI for a small/medium business owner finding upcoming events across any Indian city to monetize via sponsorship, stalls, booths, or B2B partnerships.\n\nFrom the web search snippets, EXTRACT ALL upcoming events — college fests, concerts, marathons, food festivals, trade expos, cultural fairs, startup summits, corporate conferences, wedding expos, sports events, religious fairs, melas, hackathons, tech summits — EVERY type counts.\n\nACCEPT events at ANY future date. Do NOT filter out any event type.\n\nSME FIT SCORING (score every event, do not skip any):\nHIGH SCORE (70-100): College fests, city marathons, food festivals, local B2B expos, startup meetups, cultural fairs/melas, music concerts with vendor zones, wedding expos — any event where a small business can book a stall/booth for Rs 5K-5L or sponsor a category.\nMID SCORE (40-69): Corporate conferences, professional summits, industry events, large trade shows — SME can sponsor a session or set up a side stall.\nLOW SCORE (10-39): National mega-events with minimum sponsorship above Rs 10 lakhs (AWS Summit, Google I/O, India Mobile Congress). Still INCLUDE these — just score them lower.\n\nIMPORTANT: Extract EVERY event you find. Do NOT drop any event. Even if details are partial, include it with null fields.\n\nOutput ONLY a raw JSON array (no markdown, no explanation):\n[{\"name\":\"...\",\"type\":\"College Cultural Festival|Hackathon|Tech Conference|B2B Expo|Startup Summit|Music Concert|Food Festival|Marathon|Sports Event|Cultural Fair|Wedding Expo|Corporate Conference|Religious Fair|Other\",\"city\":\"...\",\"state\":\"...\",\"organizer\":\"...\",\"expected_attendance\":null,\"start_date\":\"YYYY-MM-DD or null\",\"end_date\":\"YYYY-MM-DD or null\",\"source_url\":\"...\",\"raw_summary\":\"2 sentence description\",\"sme_fit_score\":75,\"sme_fit_reason\":\"one sentence why SME can succeed here\"}]\n\nOnly include events with a clear name + city. Return ONLY valid raw JSON array."
+        }
+      },
+      "id": "s0-0009-event-extractor-agent",
+      "name": "Event Extractor & SME Filter",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [1120, 112]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.output || item.text || '';\nlet events = [];\n\nif (raw === 'NO_RESULTS' || !raw) return [{ json: { qualified_events: [], qualified_count: 0, total_found: 0 } }];\n\ntry {\n  let str = typeof raw === 'string' ? raw : JSON.stringify(raw);\n  str = str.trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n  const match = str.match(/\\[[\\s\\S]*\\]/);\n  if (match) events = JSON.parse(match[0]);\n  else if (str.startsWith('[')) events = JSON.parse(str);\n} catch (e) { events = []; }\n\nif (!Array.isArray(events)) events = [];\n\n// Deduplicate by name+city\nconst seen = new Set();\nconst unique = events.filter(ev => {\n  const key = `${(ev.name||'').toLowerCase().trim()}_${(ev.city||'').toLowerCase().trim()}`;\n  if (seen.has(key)) return false;\n  seen.add(key); return true;\n});\n\nconst today = new Date();\n\n// Score ALL events — NO filtering, all pass through\nconst allScored = unique.map(ev => {\n  let opp = 0;\n  const att = parseInt(ev.expected_attendance) || 0;\n  if (att >= 5000) opp += 30;\n  else if (att >= 2000) opp += 20;\n  else if (att >= 500) opp += 10;\n  else opp += 5;\n\n  if (ev.start_date) {\n    try {\n      const days = (new Date(ev.start_date) - today) / 86400000;\n      if (days > 0 && days <= 30) opp += 40;\n      else if (days > 30 && days <= 90) opp += 30;\n      else if (days > 90 && days <= 180) opp += 20;\n      else if (days > 180) opp += 10;\n      else opp -= 10;\n    } catch(e) { opp += 10; }\n  } else { opp += 10; }\n\n  if (ev.organizer) opp += 10;\n  if (ev.city) opp += 10;\n  if (ev.source_url) opp += 5;\n  const sme = parseInt(ev.sme_fit_score) || 0;\n  opp += Math.round(sme * 0.15);\n\n  let urgency = 'PIPELINE';\n  if (ev.start_date) {\n    try {\n      const days = (new Date(ev.start_date) - today) / 86400000;\n      if (days <= 30) urgency = 'HOT';\n      else if (days <= 90) urgency = 'PRIME';\n      else if (days <= 180) urgency = 'PIPELINE';\n      else urgency = 'LONG_HORIZON';\n    } catch(e) {}\n  }\n\n  return { ...ev, opportunity_score: opp, sme_fit_score: sme, urgency };\n});\n\n// Sort best-first — NO score filter, NO slice cap. ALL events pass through.\nconst qualified = allScored\n  .sort((a, b) => (b.sme_fit_score + b.opportunity_score) - (a.sme_fit_score + a.opportunity_score));\n\nreturn [{ json: { qualified_events: qualified, qualified_count: qualified.length, total_found: unique.length } }];"
+      },
+      "id": "s0-0010-parse-score-events",
+      "name": "Parse & Score Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1344, 112]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-qualified",
+              "leftValue": "={{ $json.qualified_count }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "s0-0011-if-qualified",
+      "name": "Any Qualified Events?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1568, 112]
+    },
+    {
+      "parameters": {
+        "chatId": "6398643373",
+        "text": "🔍 EVENT HUNTER — Run Complete\n\n❌ No qualifying events found.\nAll discovered events were either too large/corporate for SME engagement, or lacked sufficient details.",
+        "additionalFields": {}
+      },
+      "id": "s0-0012-no-events-telegram",
+      "name": "No Events Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1792, 336],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram_bot_token_main",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst events = data.qualified_events || [];\nif (events.length === 0) return [];\nreturn events.map(ev => ({ json: ev }));"
+      },
+      "id": "s0-0013-expand-events",
+      "name": "Expand Qualified Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1792, 112]
+    },
+    {
+      "parameters": { "batchSize": 1, "options": {} },
+      "id": "s0-0014-split-batches",
+      "name": "Process One By One",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [2016, 112]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ev = $input.first().json;\nconst att = ev.expected_attendance ? `${parseInt(ev.expected_attendance).toLocaleString()} expected attendees` : 'audience size not confirmed';\nconst dates = ev.start_date ? `dates: ${ev.start_date}${ev.end_date ? ' to ' + ev.end_date : ''}` : 'dates upcoming';\nconst parts = [\n  `${ev.name} in ${ev.city || 'India'}`,\n  att, `event type: ${ev.type || 'event'}`, dates,\n  ev.organizer ? `Organizer: ${ev.organizer}` : null,\n  ev.source_url ? `Source: ${ev.source_url}` : null,\n  ev.raw_summary || null\n].filter(Boolean);\nreturn [{ json: { raw_event: parts.join(', '), event_name: ev.name, city: ev.city, opportunity_score: ev.opportunity_score, sme_fit_score: ev.sme_fit_score } }];"
+      },
+      "id": "s0-0015-format-event-string",
+      "name": "Format Event String",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2240, 112]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "Event Money Agent - Commander (Stage 7)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": { "raw_event": "={{ $json.raw_event }}" },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "raw_event",
+              "displayName": "raw_event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 2,
+          "waitBetweenTries": 30000
+        }
+      },
+      "id": "s0-0016-execute-commander",
+      "name": "Execute Commander",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [2464, 112],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000
+    }
+  ],
+  "connections": {
+    "Run Now (Testing)": {
+      "main": [[{ "node": "Search Config", "type": "main", "index": 0 }]]
+    },
+    "Search Config": {
+      "main": [[{ "node": "Build Search Queries", "type": "main", "index": 0 }]]
+    },
+    "Build Search Queries": {
+      "main": [[{ "node": "Tavily Web Search", "type": "main", "index": 0 }]]
+    },
+    "Tavily Web Search": {
+      "main": [[{ "node": "Prepare LLM Input", "type": "main", "index": 0 }]]
+    },
+    "Prepare LLM Input": {
+      "main": [[{ "node": "Event Extractor & SME Filter", "type": "main", "index": 0 }]]
+    },
+    "Groq LLM": {
+      "ai_languageModel": [[{ "node": "Event Extractor & SME Filter", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Event Extractor & SME Filter": {
+      "main": [[{ "node": "Parse & Score Events", "type": "main", "index": 0 }]]
+    },
+    "Parse & Score Events": {
+      "main": [[{ "node": "Any Qualified Events?", "type": "main", "index": 0 }]]
+    },
+    "Any Qualified Events?": {
+      "main": [
+        [{ "node": "Expand Qualified Events", "type": "main", "index": 0 }],
+        [{ "node": "No Events Alert", "type": "main", "index": 0 }]
+      ]
+    },
+    "Expand Qualified Events": {
+      "main": [[{ "node": "Process One By One", "type": "main", "index": 0 }]]
+    },
+    "Process One By One": {
+      "main": [
+        [{ "node": "Format Event String", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Format Event String": {
+      "main": [[{ "node": "Execute Commander", "type": "main", "index": 0 }]]
+    },
+    "Execute Commander": {
+      "main": [[{ "node": "Process One By One", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

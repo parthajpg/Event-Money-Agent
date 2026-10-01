@@ -1,0 +1,18 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: event-money-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - WEBHOOK_URL=https://seem-towards-triumph-mac.trycloudflare.com/
+      - N8N_WEBHOOK_URL=https://seem-towards-triumph-mac.trycloudflare.com/
+      - N8N_EDITOR_BASE_URL=https://seem-towards-triumph-mac.trycloudflare.com/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
